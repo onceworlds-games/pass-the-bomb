@@ -256,3 +256,25 @@ test('a run goes through dawn to a second night, and a run lost ends the match',
     }, 2800);
   });
 });
+
+test('the host batches its events: one message per snapshot, not one per frame', () => {
+  const bus = makeRoomBus();
+  const A = sessionFor(bus.join('a', 'Ann'));
+  const B = sessionFor(bus.join('b', 'Bo'));
+  const at = [];
+  bus.pages[1].room.on('message', (data) => {
+    if (data && data.t === 'ev') at.push(bus.shared.now);
+  });
+  A.s.newRun({ seed: 21 });
+  bus.pages[0].room.startMatch();
+  for (let i = 0; i < 300; i++) {
+    bus.tick(16);
+    // Something happens on the host's table every frame (a busy wave).
+    if (A.s.night()) A.s.night().S.events.push({ k: 'pulse', c: 3, r: 3, t: 0 });
+    A.s.update(bus.shared.now, 0.016);
+    B.s.update(bus.shared.now, 0.016);
+  }
+  assert.ok(B.events.filter((e) => e.k === 'pulse').length > 200, 'the events still reach the guest');
+  assert.ok(at.length >= 40 && at.length <= 52, `about ten messages a second (${at.length} in 4.8 s)`);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 90, 'never two in one snapshot period');
+});

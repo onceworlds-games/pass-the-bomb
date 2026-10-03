@@ -44,6 +44,8 @@ export function createSession({ room, me, hooks }) {
     snapSeq: 0,
     lastSnapSeq: -1,
     lastHostId: room.host,
+    evBuf: [],
+    lastEvAt: 0,
   };
 
   const isHost = () => !!(room.isHost && room.connected);
@@ -207,8 +209,15 @@ export function createSession({ room, me, hooks }) {
       if (e.k === 'refuse' && e.pid !== me.id) continue;
       hooks.onEvent?.(e, true);
     }
-    const fwd = packEvents(events);
-    if (fwd.length && room.kind !== 'solo') room.send({ t: 'ev', list: fwd });
+    // Events travel in batches at the snapshot rate (one message per frame would spend the room's budget).
+    if (room.kind !== 'solo') {
+      for (const e of packEvents(events)) if (S.evBuf.length < 60) S.evBuf.push(e);
+      if (S.evBuf.length && wall - S.lastEvAt >= 1000 / SNAP_HZ) {
+        S.lastEvAt = wall;
+        room.send({ t: 'ev', list: S.evBuf });
+        S.evBuf = [];
+      }
+    }
     // Publish: pieces on change, a snapshot at 10 Hz, bookkeeping state at low rates.
     const pj = JSON.stringify(N.exportPieces());
     if (pj !== S.lastPiecesJson) {
@@ -238,6 +247,8 @@ export function createSession({ room, me, hooks }) {
     if (!isHost() || !S.N || !S.R) return;
     endNight(S.R, S.N, platform.now());
     hooks.onNightEnd?.(S.R, S.N);
+    if (S.evBuf.length && room.kind !== 'solo') room.send({ t: 'ev', list: S.evBuf });
+    S.evBuf = [];
     publishRun();
     room.endMatch();
   }
@@ -418,6 +429,7 @@ export function createSession({ room, me, hooks }) {
   // ---- room events ----------------------------------------------------------------------------------------
   room.on('matchstart', () => {
     S.nightEndTimer = 0;
+    S.evBuf = [];
     S.shadeLerp.clear();
     S.lastSnapSeq = -1;
     if (isHost()) hostStartNight();
