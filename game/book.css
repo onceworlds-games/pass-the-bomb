@@ -844,6 +844,26 @@
   }
 }
 
+/* A replay: the table, and one plate at the top with the way back. */
+.screen.replay {
+  background: radial-gradient(ellipse at 50% 50%, rgba(5, 6, 10, 0), rgba(5, 6, 10, 0.45));
+  pointer-events: none;
+  align-items: flex-start;
+  padding-top: calc(10px + var(--safe-top));
+}
+.replay-plate {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 6px 6px 18px;
+}
+.replay-label {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 19px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .book {
     animation: none;

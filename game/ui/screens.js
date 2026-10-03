@@ -359,12 +359,14 @@ export function makeScreens(root) {
     page('dawn', `Dawn after night ${R.night}`, (p) => {
       const last = R.ledger[R.ledger.length - 1];
       if (last) {
-        entries(section(p, ''), [
+        const s = section(p, '');
+        entries(s, [
           ['Burned', String(last.kills)],
           ['Score', `+${last.score}`],
           ['Heart', `${R.heart.hp} / ${R.heart.max}`],
           ['Glass cracked', String(last.cracks)],
         ]);
+        if (v.onReplay) s.append(watchAgain(v.onReplay));
       }
       if (R.draft && R.draft.taken < 0) {
         const d = section(p, v.isHost ? 'Take one' : 'The host takes one', 'draft');
@@ -427,6 +429,7 @@ export function makeScreens(root) {
       s.append(table);
       const last = R.ledger[R.ledger.length - 1];
       if (!won && last && last.lostBy) s.append(marg(lossNote(last.lostBy, R)));
+      if (v.onReplay) s.append(watchAgain(v.onReplay));
       if (won) s.append(marg('Twelve nights. The table is yours; the dark keeps coming if you let it.'));
       if (v.isHost) {
         const row = el('div', 'go');
@@ -469,6 +472,24 @@ export function makeScreens(root) {
     });
   }
 
+  /** The button that plays the night's last seconds again. */
+  function watchAgain(onReplay) {
+    const row = el('div', 'go');
+    row.append(btn('brass-btn quiet', 'Watch again', onReplay));
+    return row;
+  }
+
+  /** Over a replay: one small plate with what it is and the way back. */
+  function replay(onBack) {
+    current = 'replay';
+    root.className = 'screen replay';
+    root.replaceChildren();
+    const plate = el('div', 'plate replay-plate');
+    plate.append(el('span', 'replay-label', 'Half speed'), btn('brass-btn quiet', 'Back', onBack));
+    root.append(plate);
+    root.hidden = false;
+  }
+
   /** Someone who arrived mid-night: a small plate at the top, nothing else over the table. */
   function watching(v) {
     current = 'watching';
@@ -485,6 +506,7 @@ export function makeScreens(root) {
     ended,
     closed,
     watching,
+    replay,
     hide,
     get current() {
       return current;

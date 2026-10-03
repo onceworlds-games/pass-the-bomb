@@ -4,6 +4,7 @@ import { platform } from './platform.js';
 import { makeScene } from './render/scene.js';
 import { makeFx } from './render/fx.js';
 import { makeDemo } from './render/demo.js';
+import { makeRecorder } from './render/replay.js';
 import { makeHud, makeHints } from './ui/hud.js';
 import { makeInput } from './ui/input.js';
 import { makeScreens } from './ui/screens.js';
@@ -42,6 +43,7 @@ async function boot() {
   const screens = makeScreens(document.getElementById('screen'), {});
   const audio = makeAudio();
   const demo = makeDemo();
+  const recorder = makeRecorder();
   const test = params.has('test');
 
   // Join first, before anything heavy, so a reload keeps its seat.
@@ -77,6 +79,7 @@ async function boot() {
         app.nightKills = { r: 0, g: 0, b: 0 };
         app.cracked = false;
         app.hintsShown = new Set();
+        recorder.clear();
         scene.setBoard(N.board, profile.p.cosmetics);
         input.deselect();
         audio.nightStart();
@@ -86,10 +89,10 @@ async function boot() {
       onLobby: () => showLobby(),
       onRun: () => {
         syncProfileFromRun();
-        if (app.screen !== 'play') showLobby();
+        if (app.screen !== 'play' && app.screen !== 'replay') showLobby();
       },
       onHost: () => {
-        if (!session.playing()) showLobby();
+        if (!session.playing() && app.screen !== 'replay') showLobby();
       },
       onRoster: () => {
         if (app.screen === 'lobby') showLobby();
@@ -206,6 +209,7 @@ async function boot() {
     switch (e.k) {
       case 'kill': {
         const def = SHADES[e.type];
+        if (N) recorder.event(e, N.S.t);
         // Burned away: sparks, a ring in the colour that did it (brighter when it was the colour it wanted), the score.
         const col = e.match && KILL_HUE[e.hue] ? KILL_HUE[e.hue] : 'rgba(255,226,170,0.95)';
         fx.burst(e.x, e.y, def?.boss ? 40 : e.match ? 12 : 8, col, def?.boss ? 220 : 90, { quality: app.quality });
@@ -438,12 +442,14 @@ async function boot() {
     try {
       room.hideLobby?.(false);
     } catch {}
+    const span = recorder.span;
+    const onReplay = span && span.to - span.from >= 3 ? () => startReplay() : null;
     if (R && R.phase === 'dawn') {
-      screens.dawn({ run: R, isHost: session.isHost(), brass: profile.p.cosmetics.brass, onDraft: (i) => session.draft(i) && audio.play('draft'), onFate: (t) => session.fate(t) && audio.play('draft') });
+      screens.dawn({ run: R, isHost: session.isHost(), brass: profile.p.cosmetics.brass, onReplay, onDraft: (i) => session.draft(i) && audio.play('draft'), onFate: (t) => session.fate(t) && audio.play('draft') });
       return;
     }
     if (R && (R.phase === 'lost' || R.phase === 'won')) {
-      screens.ended({ run: R, isHost: session.isHost(), onEndless: () => session.endless(), onNewRun: () => session.abandonRun() && showLobby() });
+      screens.ended({ run: R, isHost: session.isHost(), onReplay, onEndless: () => session.endless(), onNewRun: () => session.abandonRun() && showLobby() });
       return;
     }
     if (app.setup.daily != null) app.setup.daily = dailyDay(platform.now());
@@ -499,6 +505,26 @@ async function boot() {
         showLobby();
       },
     });
+  }
+
+  /** The night's last seconds again, at half speed, on the table behind a small plate with Back. */
+  function startReplay() {
+    const span = recorder.span;
+    if (!span || session.playing()) return;
+    app.screen = 'replay';
+    app.replay = { t: span.from, wait: 0 };
+    hud.hide();
+    hints.hide();
+    fitScene();
+    scene.setBoard(recorder.board, profile.p.cosmetics);
+    screens.replay(() => {
+      audio.play('select');
+      showLobby();
+    });
+    try {
+      room.hideLobby?.(true);
+    } catch {}
+    audio.play('select');
   }
 
   /** The host's own Start (standalone only; on the platform the strip's Start does this). */
@@ -634,6 +660,11 @@ async function boot() {
         drawNight(N, dt, shake);
         audio.tick(dt, nightAudio(N));
       } else {
+        if (app.screen === 'replay') {
+          drawReplay(dt, shake);
+          audio.tick(dt, null, true);
+          return;
+        }
         // Between nights the table keeps running on its own: a slow demo night on the Octagon. Behind a page of
         // the logbook it is drawn at half rate (it is mostly covered, and phones have better things to do).
         if (scene.board !== demo.board) scene.setBoard(demo.board, profile.p.cosmetics);
@@ -655,8 +686,36 @@ async function boot() {
     }
   }
 
+  /** Plays the recorded seconds at half speed, burns and all, and starts over after a breath. */
+  function drawReplay(dt, shake) {
+    const span = recorder.span;
+    const rp = app.replay;
+    if (!span || !rp) return showLobby();
+    if (rp.wait > 0) rp.wait -= dt;
+    else {
+      const before = rp.t;
+      rp.t += dt * 0.5;
+      for (const e of recorder.eventsBetween(before, rp.t)) {
+        const def = SHADES[e.type];
+        const col = e.match && KILL_HUE[e.hue] ? KILL_HUE[e.hue] : 'rgba(255,226,170,0.95)';
+        fx.burst(e.x, e.y, def?.boss ? 40 : 10, col, def?.boss ? 160 : 60, { quality: app.quality });
+        fx.ink(e.x, e.y, def?.boss ? 30 : 6, { quality: app.quality });
+        fx.snap(e.x, e.y, (def?.radius || 12) + 8, col);
+        if (!def?.swarm && e.score > 0) fx.pop(e.x, e.y - (def?.radius || 12), `+${Math.round(e.score)}`, e.match ? col : '#efe6c8');
+        audio.play('burn', { big: !!def?.boss, hue: e.hue, match: !!e.match && !!KILL_HUE[e.hue] });
+      }
+      if (rp.t >= span.to) {
+        rp.t = span.from;
+        rp.wait = 1.2;
+      }
+    }
+    const view = recorder.at(rp.t);
+    if (view) scene.frame(view, fx, { dt: dt * 0.5, reduced: app.reduced, shake });
+  }
+
   function drawNight(N, dt, shake) {
     const S = N.S;
+    recorder.capture(N);
     const segments = session.segments();
     const sel = input.selected;
     const ghost = input.ghost();
@@ -847,7 +906,7 @@ async function boot() {
 
   // ---- go -------------------------------------------------------------------------------------------------
   // The standalone page (and ?test) hands its parts to the smoke, touch and drive scripts; a played game does not.
-  if (!platform.present || test) window.__glint = { scene, session, room, profile, input, fx };
+  if (!platform.present || test) window.__glint = { scene, session, room, profile, input, fx, recorder };
   requestAnimationFrame(frame);
   if (session.playing() || test) {
     audio.unlock();
