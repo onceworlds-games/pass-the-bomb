@@ -241,6 +241,7 @@ export function createSession({ room, me, hooks }) {
     if ((N.S.phase === 'done' || N.S.phase === 'lost') && !S.nightEndTimer) {
       S.nightEndTimer = setTimeout(hostEndNight, 2600);
     }
+    keepDoorOpen();
     // Friends who arrived after the night began take a seat at dusk or in a break between waves.
     if ((N.S.phase === 'dusk' || N.S.phase === 'break') && wall - S.lastAdmitAt >= 1000) {
       S.lastAdmitAt = wall;
@@ -487,6 +488,7 @@ export function createSession({ room, me, hooks }) {
     hooks.onLobby?.();
   });
   room.on('host', () => {
+    keepDoorOpen();
     const wasHost = S.lastHostId === me.id;
     S.lastHostId = room.host;
     if (isHost() && playing() && !S.N) adopt();
@@ -499,6 +501,7 @@ export function createSession({ room, me, hooks }) {
   });
   room.on('reconnect', () => {
     if (isHost() && playing() && !S.N) adopt();
+    keepDoorOpen();
   });
   room.on('message', onMessage);
   room.on('state', (key) => {
@@ -515,13 +518,21 @@ export function createSession({ room, me, hooks }) {
   room.on('ready', () => hooks.onRoster?.());
   room.on('away', () => hooks.onRoster?.());
   room.on('back', () => hooks.onRoster?.());
-  room.on('starting', () => {
-    // Friends may drop in during a night (they watch, then take a seat between waves): the host keeps the door open.
-    if (!isHost()) return;
+  // Friends may drop in during a night (they watch, then take a seat between waves): the host keeps the door open.
+  // It opens it as the night starts, and a host who missed that moment (a new host, a connection that was down
+  // then) opens it when it finds it shut, at most every few seconds.
+  let lastOpenTry = 0;
+  function keepDoorOpen(force = false) {
+    if (!isHost() || typeof room.setOpen !== 'function') return;
+    if (!force && (room.open !== false || !room.match || room.match.phase === 'lobby')) return;
+    const now = platform.now();
+    if (!force && now - lastOpenTry < 5000) return;
+    lastOpenTry = now;
     try {
-      room.setOpen?.(true);
+      room.setOpen(true);
     } catch {}
-  });
+  }
+  room.on('starting', () => keepDoorOpen(true));
 
   /** One call per frame. */
   function update(wall, dt) {

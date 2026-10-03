@@ -70,6 +70,7 @@ async function boot() {
     hintsShown: new Set(),
     frameNo: 0,
     backdropDt: 0,
+    backdropCost: 0,
   };
   platform.controls.clear();
 
@@ -670,11 +671,15 @@ async function boot() {
         }
         // Between nights the table keeps running on its own: a slow demo night on the Octagon. Behind a page of
         // the logbook it is drawn at half rate (it is mostly covered, and phones have better things to do).
+        // A device that takes long over it draws it less often still (the room's connection matters more).
         if (scene.board !== demo.board) scene.setBoard(demo.board, profile.p.cosmetics);
         app.backdropDt += dt;
-        if (app.screen === 'title' || (app.frameNo++ & 1) === 0) {
+        const every = (app.screen === 'title' ? 1 : 2) * (app.backdropCost > 22 ? 2 : 1);
+        if (app.frameNo++ % every === 0) {
+          const t0 = performance.now();
           demo.step(app.backdropDt, app.reduced ? 0.45 : 0.7);
           scene.frame(demo.view(app.screen === 'title' ? 1 : 0.8), fx, { dt: app.backdropDt, reduced: app.reduced, shake });
+          app.backdropCost = app.backdropCost * 0.9 + (performance.now() - t0) * 0.1;
           app.backdropDt = 0;
         }
         audio.tick(dt, null, app.screen === 'lobby');
