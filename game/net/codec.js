@@ -48,7 +48,7 @@ export function applySnapshot(M, m) {
       L.power = clamp(finite(l[1], 0), 0, 5000);
     });
   }
-  if (Array.isArray(m.shades) && m.shades.length <= MAX_SHADES + 40) M.importShades(m.shades.filter((a) => Array.isArray(a) && isShadeType(a[1])));
+  if (Array.isArray(m.shades) && m.shades.length <= MAX_SHADES + 40) M.importShades(m.shades.filter((a) => Array.isArray(a) && isShadeType(a[1])), true);
   if (Array.isArray(m.heat)) M.importHeat(m.heat);
   if (m.focus && typeof m.focus === 'object') {
     for (const [id, v] of Object.entries(m.focus)) {

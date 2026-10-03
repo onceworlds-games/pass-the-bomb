@@ -46,6 +46,7 @@ export function createSession({ room, me, hooks }) {
     lastHostId: room.host,
     evBuf: [],
     lastEvAt: 0,
+    lastAdmitAt: 0,
   };
 
   const isHost = () => !!(room.isHost && room.connected);
@@ -240,6 +241,34 @@ export function createSession({ room, me, hooks }) {
     if ((N.S.phase === 'done' || N.S.phase === 'lost') && !S.nightEndTimer) {
       S.nightEndTimer = setTimeout(hostEndNight, 2600);
     }
+    // Friends who arrived after the night began take a seat at dusk or in a break between waves.
+    if ((N.S.phase === 'dusk' || N.S.phase === 'break') && wall - S.lastAdmitAt >= 1000) {
+      S.lastAdmitAt = wall;
+      admitWatchers(N);
+    }
+  }
+
+  /** Lets connected watchers into the night at a checkpoint, each with the role they brought. */
+  function admitWatchers(N) {
+    if (room.kind === 'solo' || typeof room.admit !== 'function') return;
+    const ids = [];
+    for (const p of room.players.values()) {
+      if (!p || p.connected === false || p.idle || room.isParticipant(p.id)) continue;
+      ids.push(p.id);
+    }
+    if (!ids.length) return;
+    try {
+      room.admit(ids.slice(0, 4));
+    } catch {
+      return;
+    }
+    const roles = { ...(room.state.roles && typeof room.state.roles === 'object' ? room.state.roles : {}) };
+    for (const id of ids.slice(0, 4)) {
+      const role = room.players.get(id)?.presence?.role;
+      roles[id] = ROLE_IDS.includes(role) ? role : '';
+      N.addPlayer(id, roles[id]);
+    }
+    room.setState('roles', roles);
   }
 
   function hostEndNight() {
@@ -278,7 +307,9 @@ export function createSession({ room, me, hooks }) {
     if (!M) return;
     // Smooth the ink between snapshots; the beams are re-traced locally from the mirrored glass.
     const k = clamp(dt * 12, 0, 1);
+    const cool = Math.max(0, 1 - dt * 4);
     for (const s of M.S.shades) {
+      s.burn *= cool;
       const tg = S.shadeLerp.get(s.id);
       if (!tg) continue;
       s.x += (tg.x - s.x) * k;
@@ -485,6 +516,8 @@ export function createSession({ room, me, hooks }) {
   room.on('away', () => hooks.onRoster?.());
   room.on('back', () => hooks.onRoster?.());
   room.on('starting', () => {
+    // Friends may drop in during a night (they watch, then take a seat between waves): the host keeps the door open.
+    if (!isHost()) return;
     try {
       room.setOpen?.(true);
     } catch {}

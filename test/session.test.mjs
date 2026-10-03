@@ -87,7 +87,9 @@ function makeRoomBus() {
       clearReady() {},
       hideLobby() {},
       setOpen() {},
-      admit() {},
+      admit(ids) {
+        for (const pid of ids || []) if (!shared.match.participants.includes(pid)) shared.match.participants.push(pid);
+      },
       leave() {},
       setPrivate() {},
       setPrivateFor() {},
@@ -277,4 +279,39 @@ test('the host batches its events: one message per snapshot, not one per frame',
   assert.ok(B.events.filter((e) => e.k === 'pulse').length > 200, 'the events still reach the guest');
   assert.ok(at.length >= 40 && at.length <= 52, `about ten messages a second (${at.length} in 4.8 s)`);
   for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 90, 'never two in one snapshot period');
+});
+
+test('a friend who arrives mid-night watches, then takes a seat at the next checkpoint and can place glass', () => {
+  const bus = makeRoomBus();
+  const A = sessionFor(bus.join('a', 'Ann'));
+  A.s.newRun({ seed: 4 });
+  bus.pages[0].room.startMatch();
+  const all = [A];
+  const step = (ms) => {
+    for (let i = 0; i < ms / 16; i++) {
+      bus.tick(16);
+      for (const x of all) x.s.update(bus.shared.now, 0.016);
+    }
+  };
+  step(300);
+  A.s.command({ op: 'wave' });
+  step(500);
+  const D = sessionFor(bus.join('d', 'Di'));
+  all.push(D);
+  step(300);
+  assert.ok(D.s.night(), 'the latecomer mirrors the night');
+  assert.ok(!D.s.participant(), 'and watches it');
+  D.s.command({ op: 'place', type: 'mirror', c: 3, r: 3, angle: 45 });
+  step(200);
+  assert.ok(!A.s.night().S.pieces.some((p) => p.c === 3 && p.r === 3), 'a watcher cannot place');
+  // The wave ends; in the break the host lets them in.
+  const N = A.s.night();
+  N.S.shades.length = 0;
+  N.S.pending.length = 0;
+  step(1500);
+  assert.equal(N.S.phase, 'break');
+  assert.ok(D.s.participant(), 'seated in the break');
+  D.s.command({ op: 'place', type: 'mirror', c: 3, r: 3, angle: 45 });
+  step(200);
+  assert.ok(A.s.night().S.pieces.some((p) => p.c === 3 && p.r === 3), 'and plays');
 });

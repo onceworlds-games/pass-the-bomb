@@ -800,17 +800,25 @@ export function createNight(cfg) {
     }
     return out;
   }
-  function importShades(list) {
+  /**
+   * Replaces the Shades with a snapshot's. `mirror`: a page that only draws the night keeps the look the host's
+   * simulation would give it: ink that lost hp glows where it burns, and ink that left the list fades as it dies.
+   */
+  function importShades(list, mirror = false) {
     if (!Array.isArray(list)) return;
     const next = [];
+    const kept = new Set();
     for (const a of list.slice(0, MAX_SHADES)) {
       if (!Array.isArray(a) || !SHADES[a[1]]) continue;
       const old = S.shades.find((s) => s.id === a[0]);
       const s = old || makeShade(num(a[0], 1, 1e7, 1), a[1], a[2], a[3], a[4], finite(a[11]), 1);
+      const hpBefore = old && old.state !== 'dead' ? old.hp : null;
       s.x = num(a[3], -500, board.w + 500, board.cx);
       s.y = num(a[4], -500, board.h + 500, board.cy);
       s.maxHp = num(a[6], 1, 1e5, s.maxHp);
       s.hp = num(a[5], 0, s.maxHp, s.maxHp);
+      if (mirror && hpBefore != null && s.hp < hpBefore) s.burn = Math.min(1, s.burn + (hpBefore - s.hp) / Math.max(8, s.maxHp * 0.25));
+      kept.add(s.id);
       s.state = a[7] ? 'chew' : 'walk';
       s.target = num(a[8], 0, 1e6, 0);
       s.hx = num(a[9], -100, 100, 100) / 100;
@@ -820,6 +828,16 @@ export function createNight(cfg) {
       s.arc = num(a[13], 0, 7, 0);
       clampToWorld(s, board);
       next.push(s);
+    }
+    if (mirror) {
+      for (const s of S.shades) {
+        if (kept.has(s.id)) continue;
+        if (s.state !== 'dead' && s.state !== 'hit') {
+          s.state = 'dead';
+          s.diedAt = S.t;
+        }
+        if (S.t - (s.diedAt ?? S.t) < 1.2 && next.length < MAX_SHADES + 40) next.push(s);
+      }
     }
     S.shades = next;
     S.nextShadeId = Math.max(S.nextShadeId, ...next.map((s) => s.id + 1), 1);
