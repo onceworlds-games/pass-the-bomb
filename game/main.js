@@ -3,6 +3,7 @@
 import { platform } from './platform.js';
 import { makeScene } from './render/scene.js';
 import { makeFx } from './render/fx.js';
+import { makeDemo } from './render/demo.js';
 import { makeHud, makeHints } from './ui/hud.js';
 import { makeInput } from './ui/input.js';
 import { makeScreens } from './ui/screens.js';
@@ -33,12 +34,13 @@ async function boot() {
     },
     onWave: () => wave(),
     onAbility: (name) => ability(name),
-    onZoom: (dir) => scene.setZoom(scene.view.zoom * (dir > 0 ? 1.4 : 1 / 1.4)),
+    onUndo: () => undo(),
   });
   const hints = makeHints(document.getElementById('hint'));
   const toastNode = document.getElementById('toast');
   const screens = makeScreens(document.getElementById('screen'), {});
   const audio = makeAudio();
+  const demo = makeDemo();
   const test = params.has('test');
 
   // Join first, before anything heavy, so a reload keeps its seat.
@@ -62,6 +64,8 @@ async function boot() {
     crossAt: 0,
     freeze: 0,
     lastHintAt: 0,
+    frameNo: 0,
+    backdropDt: 0,
   };
   platform.controls.clear();
 
@@ -99,6 +103,7 @@ async function boot() {
       onRefuse: (reason) => onRefuse(reason),
   };
   let session = createSession({ room, me, hooks });
+  session.setRole(profile.p.lastRole);
   await session.loadSavedRun();
 
   const input = makeInput(canvas, scene, {
@@ -124,6 +129,7 @@ async function boot() {
     sound: (name, a) => audio.play(name, { angle: a }),
     playing: () => app.screen === 'play' && canAct(),
     wave: () => wave(),
+    undo: () => undo(),
     ability: (name, hover) => ability(name, hover),
     cycleLamp: () => {},
     touched: () => audio.unlock(),
@@ -137,6 +143,14 @@ async function boot() {
       session.command({ op: 'wave' });
       audio.play('wave');
     }
+  }
+
+  /** Takes back this Optician's last placement, move or turn (the host checks it is recent and refunds its Focus). */
+  function undo() {
+    const N = session.night();
+    if (!N || !canAct()) return;
+    session.command({ op: 'undo' });
+    audio.play('sell');
   }
 
   function ability(name, hover) {
@@ -408,7 +422,10 @@ async function boot() {
     hints.hide();
     platform.controls.clear();
     const R = session.currentRun();
-    app.screen = 'lobby';
+    if (app.screen !== 'lobby') {
+      app.screen = 'lobby';
+      fitScene();
+    }
     try {
       room.hideLobby?.(false);
     } catch {}
@@ -441,6 +458,7 @@ async function boot() {
       onInvite: () => platform.ui.showInvite(),
       onRole: (r) => {
         session.setRole(r);
+        profile.set((p) => (p.lastRole = session.presence.role || p.lastRole));
         audio.play('select');
         showLobby();
       },
@@ -504,6 +522,7 @@ async function boot() {
     app.closed = false;
     room = await platform.join(JOIN);
     session = createSession({ room, me, hooks });
+    session.setRole(profile.p.lastRole);
     wireRoom();
     await session.loadSavedRun();
     if (session.playing()) showPlay();
@@ -518,11 +537,7 @@ async function boot() {
       screens.watching({ night: session.currentRun()?.night || 1 });
     } else {
       hud.show();
-      const portrait = innerHeight > innerWidth * 1.2;
-      scene.setInsets(hud.insets(portrait));
-      scene.layout();
-      // A small screen opens zoomed so a cell is at least 30 px to tap; the buttons zoom back out.
-      if (scene.view.fit * CELL < 30 && scene.view.zoom === 1) scene.setZoom(Math.min(3, 30 / (scene.view.fit * CELL)));
+      fitScene();
     }
     try {
       room.hideLobby?.(true);
@@ -538,6 +553,32 @@ async function boot() {
       .map((t) => ({ type: t, count: N.available(t) }));
   }
 
+  /** Which lanes to draw: the next wave's (at dusk and in breaks), and with Second Sight every wave still to come. */
+  function laneForecast(N) {
+    const S = N.S;
+    const next = S.phase === 'dusk' ? 0 : S.phase === 'break' || S.phase === 'wave' ? S.wave + 1 : -1;
+    const sight = !!N.mods.forecastAll;
+    const lanes = [];
+    const seen = new Set();
+    N.plan.waves.forEach((w, i) => {
+      if (i < next || next < 0) return;
+      const soon = i === next && S.phase !== 'wave';
+      if (!soon && !sight) return;
+      const byArc = new Map();
+      for (const e of w.entries) {
+        const hue = SHADES[e.type]?.cls === 'plain' ? 'w' : e.hue;
+        if (!byArc.has(e.arc)) byArc.set(e.arc, new Set());
+        byArc.get(e.arc).add(hue);
+      }
+      for (const [arc, hues] of byArc) {
+        if (seen.has(arc)) continue;
+        seen.add(arc);
+        lanes.push({ arc, hues: [...hues].sort(), faint: !soon });
+      }
+    });
+    return lanes.length ? { lanes } : null;
+  }
+
   function forecastText(N) {
     const S = N.S;
     const next = S.phase === 'dusk' ? 0 : S.phase === 'break' ? S.wave + 1 : -1;
@@ -549,7 +590,15 @@ async function boot() {
     const arcs = [...new Set(w.arcs)].map((a) => N.board.arcs[a]?.name).filter(Boolean).join(', ');
     const locked = w.entries.some((e) => SHADES[e.type]?.cls === 'locked');
     const hues = w.hues.map((h) => hueWord[h]).join(' and ');
-    return `${next === 0 ? `Night ${S.night}.` : `Next:`} ${names} from the ${arcs}.${locked ? ` The Veils want ${hues}.` : w.hues.length && w.entries.some((e) => SHADES[e.type]?.cls === 'tinted') ? ` They want ${hues}.` : ''}`;
+    let line = `${next === 0 ? `Night ${S.night}.` : `Next:`} ${names} from the ${arcs}.${locked ? ` The Veils want ${hues}.` : w.hues.length && w.entries.some((e) => SHADES[e.type]?.cls === 'tinted') ? ` They want ${hues}.` : ''}`;
+    // Second Sight (or a Seer at the table) reads one wave further.
+    const then = N.mods.forecastAll ? N.plan.waves[next + 1] : null;
+    if (then) {
+      const tn = [...new Set(then.entries.map((e) => e.type))].map((t) => SHADES[t]?.name).filter(Boolean).slice(0, 2).join(', ');
+      const ta = [...new Set(then.arcs)].map((a) => N.board.arcs[a]?.name).filter(Boolean).join(', ');
+      line += ` Then ${tn} from the ${ta}.`;
+    }
+    return line;
   }
 
   let last = performance.now();
@@ -571,11 +620,14 @@ async function boot() {
         drawNight(N, dt, shake);
         audio.tick(dt, nightAudio(N));
       } else {
-        if (scene.board) {
-          scene.frame({ t: now / 1000, pieces: [], lamps: scene.board.lamps.map((L) => ({ ...L, power: 60 })), shades: [], segments: [], intensity: 0.6 }, fx, { dt, reduced: app.reduced, shake });
-        } else {
-          const board = session.boardOf(app.setup.boardId);
-          scene.setBoard(board, profile.p.cosmetics);
+        // Between nights the table keeps running on its own: a slow demo night on the Octagon. Behind a page of
+        // the logbook it is drawn at half rate (it is mostly covered, and phones have better things to do).
+        if (scene.board !== demo.board) scene.setBoard(demo.board, profile.p.cosmetics);
+        app.backdropDt += dt;
+        if (app.screen === 'title' || (app.frameNo++ & 1) === 0) {
+          demo.step(app.backdropDt, app.reduced ? 0.45 : 0.7);
+          scene.frame(demo.view(app.screen === 'title' ? 1 : 0.8), fx, { dt: app.backdropDt, reduced: app.reduced, shake });
+          app.backdropDt = 0;
         }
         audio.tick(dt, null);
         if (test) driveLobby();
@@ -599,9 +651,7 @@ async function boot() {
       const pieces = S.pieces.filter((p) => p.id !== ghost.moving).concat([{ ...ghost.piece, id: -1 }]);
       ghostSegs = traceBeams({ board: N.board, pieces, lamps: S.lamps, t: S.t, mods: N.mods }).segments;
     }
-    const next = S.phase === 'dusk' ? 0 : S.phase === 'break' ? S.wave + 1 : -1;
-    const w = N.plan.waves[next];
-    const fc = w ? { arcs: w.arcs, hues: w.hues } : null;
+    const fc = laneForecast(N);
     scene.frame(
       {
         t: S.t,
@@ -616,7 +666,6 @@ async function boot() {
         shadows: S.shadows,
         bands: S.bands,
         forecast: fc,
-        lanes: !!fc,
         ghost: ghost ? { ...ghost, segments: ghostSegs } : null,
         selected: sel,
         locks: session.locks(),
@@ -630,10 +679,9 @@ async function boot() {
     );
     // The dial and energies, over everything.
     const ctx = scene.ctx;
-    const sc = scene.view.scale * platform.settings.pixelRatio(2);
-    ctx.setTransform(sc, 0, 0, sc, (scene.view.ox + shake.x) * platform.settings.pixelRatio(2), (scene.view.oy + shake.y) * platform.settings.pixelRatio(2));
+    scene.applyView(ctx, shake);
     if (canAct()) input.drawOverlay(ctx, S.t);
-    if (input.showEnergy) scene.beams.drawGhost(ctx, segments, { fontSize: 12 });
+    if (input.showEnergy) scene.beams.drawGhost(ctx, segments, { fontSize: 13 / Math.max(0.3, scene.view.scale), upright: scene.upright });
     // HUD.
     const pl = N.player(me.id);
     const t = S.t;
@@ -656,8 +704,8 @@ async function boot() {
       surge: pl && S.phase !== 'dusk' ? { ready: t >= pl.surgeAt, left: clamp((pl.surgeAt - t) / N.mods.surgeCd, 0, 1) } : null,
       waveButton: !canAct() ? '' : S.phase === 'dusk' ? 'Begin night' : S.phase === 'break' ? 'Next wave' : '',
       waveDisabled: false,
+      undo: canAct() && !!N.canUndo?.(me.id),
       forecast: S.phase === 'dusk' || S.phase === 'break' ? forecastText(N) : '',
-      zoomable: true,
     });
     // Guided first night: one short line at the moment it matters.
     if (N.plan.tutorial && canAct()) tutorialHints(N);
@@ -730,8 +778,12 @@ async function boot() {
   function resize() {
     const pr = platform.settings.pixelRatio(2);
     scene.resize(innerWidth, innerHeight, pr);
-    const portrait = innerHeight > innerWidth * 1.2;
-    scene.setInsets(app.screen === 'play' ? hud.insets(portrait) : { left: 0, top: 0, right: 0, bottom: 0 });
+    fitScene();
+  }
+  /** The room the table gets: the HUD's insets in play; on the title a screen held upright keeps the Lamp clear of Play. */
+  function fitScene() {
+    const tall = innerHeight > innerWidth * 1.25;
+    scene.setInsets(app.screen === 'play' ? hud.insets() : app.screen === 'title' && tall ? { left: 0, top: 0, right: 0, bottom: Math.round(innerHeight * 0.16) } : { left: 0, top: 0, right: 0, bottom: 0 });
   }
   addEventListener('resize', resize);
   platform.settings.onChange(() => {
@@ -741,7 +793,8 @@ async function boot() {
     resize();
   });
   scene.setQuality(app.quality, platform.settings.pixelRatio(2));
-  scene.setBoard(session.boardOf(app.setup.boardId), profile.p.cosmetics);
+  scene.setAutoRotate(true);
+  scene.setBoard(demo.board, profile.p.cosmetics);
   resize();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -788,6 +841,7 @@ async function boot() {
       refreshAvatars();
     });
     app.screen = 'title';
+    fitScene();
     try {
       room.hideLobby?.(true);
     } catch {}

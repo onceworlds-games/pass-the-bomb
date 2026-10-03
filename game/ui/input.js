@@ -29,6 +29,22 @@ export function makeInput(canvas, scene, api) {
 
   const now = () => performance.now();
   const pieceAt = (cell) => (cell ? api.pieces().find((p) => p.c === cell.c && p.r === cell.r) : null);
+  /** The piece under a point, or the nearest one within a fingertip of it (cells are small on a phone). */
+  const pieceNear = (w, cell, touch) => {
+    const exact = pieceAt(cell);
+    if (exact || !touch || !w) return exact;
+    const reach = Math.max(CELL * 0.5, 24 / Math.max(0.2, scene.view.scale));
+    let best = null;
+    let bd = reach;
+    for (const p of api.pieces()) {
+      const d = Math.hypot((p.c + 0.5) * CELL - w.x, (p.r + 0.5) * CELL - w.y);
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
+    }
+    return best;
+  };
   const pieceById = (id) => api.pieces().find((p) => p.id === id);
   const centre = (p) => ({ x: (p.c + 0.5) * CELL, y: (p.r + 0.5) * CELL });
 
@@ -43,7 +59,9 @@ export function makeInput(canvas, scene, api) {
     const a = normDeg(p.angle);
     const rad = (a * Math.PI) / 180;
     const { R } = dialSizes();
-    return { cx: c.x, cy: c.y, hx: c.x + Math.cos(rad) * R, hy: c.y + Math.sin(rad) * R, sx: c.x + R * 0.95, sy: c.y - R * 0.95, R };
+    // The sell button sits at the ring's upper right on screen, whichever way the table is turned.
+    const sy = scene.view.rot ? R * 0.95 : -R * 0.95;
+    return { cx: c.x, cy: c.y, hx: c.x + Math.cos(rad) * R, hy: c.y + Math.sin(rad) * R, sx: c.x + R * 0.95, sy: c.y + sy, R };
   }
 
   function hitDial(w, p) {
@@ -77,8 +95,10 @@ export function makeInput(canvas, scene, api) {
     const { x, y } = local(e);
     const w = scene.toWorld(x, y);
     const cell = scene.cellAt(x, y);
+    const touch = e.pointerType === 'touch' || e.pointerType === 'pen';
+    st.hover = cell;
     const selected = st.sel ? pieceById(st.sel) : null;
-    const down = { x, y, w, cell, moved: false, t: now(), mode: 'empty', pieceId: 0 };
+    const down = { x, y, w, cell, moved: false, t: now(), mode: 'empty', pieceId: 0, touch };
     const dialHit = hitDial(w, selected);
     if (dialHit === 'sell') {
       down.mode = 'sell';
@@ -95,7 +115,7 @@ export function makeInput(canvas, scene, api) {
       } else if (st.trayType && cell && cell.open && !pieceAt(cell)) {
         down.mode = 'place';
       } else {
-        const p = pieceAt(cell);
+        const p = pieceNear(w, cell, touch);
         if (p) {
           down.mode = 'piece';
           down.pieceId = p.id;
@@ -184,12 +204,15 @@ export function makeInput(canvas, scene, api) {
     st.dragCell = null;
     st.dialAngle = null;
     st.lampIndex = -1;
+    // A finger leaves no hover behind (no ghost left standing where it lifted).
+    if (d.touch) st.hover = null;
   }
 
   function onCancel(e) {
     if (e.pointerId !== st.pointerId) return;
     clearTimeout(st.longPress);
     st.pointerId = null;
+    if (st.down && st.down.touch) st.hover = null;
     st.down = null;
     st.dragCell = null;
     st.dialAngle = null;
@@ -251,6 +274,8 @@ export function makeInput(canvas, scene, api) {
     } else if (k === ' ') {
       api.wave();
       e.preventDefault();
+    } else if ((k === 'z' || k === 'Z') && !e.repeat) {
+      api.undo?.();
     } else if (k === 'f' || k === 'F') api.ability('flare', st.hover);
     else if (k === 'r' || k === 'R') api.ability('dawn');
     else if (k === 'g' || k === 'G') api.ability('surge');
@@ -373,7 +398,11 @@ export function makeInput(canvas, scene, api) {
       ctx.font = `600 ${Math.round(15 * k)}px "Cormorant", serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`${Math.round(normDeg(p.angle))}°`, g.hx - g.cx, g.hy - g.cy + k);
+      ctx.save();
+      scene.upright(ctx, g.hx - g.cx, g.hy - g.cy);
+      // The angle as this screen shows it (a turned table reads a quarter less).
+      ctx.fillText(`${Math.round(normDeg(p.angle - (scene.view.rot ? 90 : 0)))}°`, 0, k);
+      ctx.restore();
     }
     // Sell: a small brass button with an X, top right of the ring.
     ctx.fillStyle = '#4a2e1c';

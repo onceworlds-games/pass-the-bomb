@@ -30,8 +30,8 @@ export function makeShadeRenderer() {
   const atlas = new Map(); // `${r}` -> canvas with FRAMES frames in a row
   let scaleUsed = 1;
 
-  function sprite(r, scale) {
-    const key = `${r}@${scale}`;
+  function sprite(r, scale, hue = 'w') {
+    const key = `${r}@${scale}:${hue}`;
     let c = atlas.get(key);
     if (c) return c;
     const pad = Math.ceil(r * 1.6 + 6);
@@ -68,8 +68,13 @@ export function makeShadeRenderer() {
         g.stroke();
       }
       g.restore();
-      g.strokeStyle = 'rgba(80,70,100,0.5)';
-      g.lineWidth = 1;
+      // A cold rim so the ink reads on dark felt; tinted ink rims in the colour it wants.
+      const rim = hue === 'w' ? '150,140,190' : hue === 'r' ? '255,93,77' : hue === 'g' ? '107,255,143' : '93,180,255';
+      g.strokeStyle = `rgba(${rim},0.22)`;
+      g.lineWidth = 3.2;
+      g.stroke();
+      g.strokeStyle = `rgba(${rim},${hue === 'w' ? 0.55 : 0.75})`;
+      g.lineWidth = 1.2;
       g.stroke();
       g.restore();
     }
@@ -83,13 +88,19 @@ export function makeShadeRenderer() {
     return best;
   }
 
-  /** Draws every Shade. `t` is night seconds; `view.scale` picks the atlas resolution. */
+  /**
+   * Draws every Shade. `t` is night seconds; `view.scale` picks the atlas resolution. `opts.rot` says the table is
+   * turned a quarter on screen: each Shade's marks (glyph, health, chewing) are drawn upright. Small ink is drawn a
+   * little larger than its body on small screens so it never shrinks to a speck.
+   */
   function draw(ctx, shades, t, view, opts = {}) {
-    const scale = clamp(Math.round(view.scale * (opts.pixelRatio || 1) * 2) / 2, 0.5, 3);
+    const vs = Math.max(0.05, view.scale || 1);
+    const scale = clamp(Math.round(vs * (opts.pixelRatio || 1) * 2 * 1.4) / 2, 0.5, 3.5);
     if (scale !== scaleUsed) {
       atlas.clear();
       scaleUsed = scale;
     }
+    const rot = !!opts.rot;
     for (const s of shades) {
       const def = SHADES[s.type] || SHADES.wisp;
       if (def.boss) {
@@ -100,23 +111,30 @@ export function makeShadeRenderer() {
       const age = dead ? clamp((t - (s.diedAt ?? t)) / 1.0, 0, 1) : 0;
       ctx.save();
       ctx.translate(s.x, s.y);
+      if (rot) ctx.rotate(Math.PI / 2);
+      // Never smaller than a few screen px: 7 for most ink, 5 for a gnat.
+      const grow = clamp((def.swarm ? 5 : 7) / (s.r * vs), 1.12, 1.8);
+      ctx.scale(grow, grow);
       if (dead) {
         // Burned away: the ink thins and scatters.
         ctx.globalAlpha = 1 - age;
         ctx.scale(1 + age * 0.8, 1 - age * 0.6);
       }
       const r = nearestSize(s.r);
-      const sp = sprite(r, scale);
+      const hue = effectiveHue(s);
+      const sp = sprite(r, scale, def.cls === 'plain' ? 'w' : hue);
       const frame = Math.floor((t * 6 + s.seed) % FRAMES);
       const size = sp.cell;
       ctx.drawImage(sp.canvas, frame * size * scale, 0, size * scale, size * scale, -sp.pad, -sp.pad, size, size);
       if (!dead) {
-        // Eyes: two bone-white points that look where the Shade walks.
-        const ex = s.hx * r * 0.35;
-        const ey = s.hy * r * 0.35;
+        // Eyes: two bone-white points that look where the Shade walks (its heading, turned with the table).
+        const hx = rot ? s.hy : s.hx;
+        const hy = rot ? -s.hx : s.hy;
+        const ex = hx * r * 0.35;
+        const ey = hy * r * 0.35;
         const sep = Math.max(2.5, r * 0.32);
-        const px = -s.hy * sep;
-        const py = s.hx * sep;
+        const px = -hy * sep;
+        const py = hx * sep;
         const blink = ((t * 1.3 + s.seed) % 4) > 3.85;
         ctx.fillStyle = PALETTE.bone;
         const er = Math.max(1.2, r * 0.17) * (blink ? 0.3 : 1);
@@ -133,12 +151,13 @@ export function makeShadeRenderer() {
           ctx.stroke();
         }
         if (s.type === 'gloom') {
-          const g = ctx.createRadialGradient(0, 0, r, 0, 0, SHADES.gloom.aura);
+          const aura = SHADES.gloom.aura / grow;
+          const g = ctx.createRadialGradient(0, 0, r, 0, 0, aura);
           g.addColorStop(0, 'rgba(5,6,10,0.5)');
           g.addColorStop(1, 'rgba(5,6,10,0)');
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(0, 0, SHADES.gloom.aura, 0, Math.PI * 2);
+          ctx.arc(0, 0, aura, 0, Math.PI * 2);
           ctx.fill();
         }
         if (s.type === 'moth') wings(ctx, r, t, s.seed);
@@ -149,7 +168,6 @@ export function makeShadeRenderer() {
           ctx.fillText('·'.repeat(1 + Math.floor((t * 3) % 3)), 0, -r - 4);
         }
         // Hue glyph: the colour it wants, as a shape (playable without colour).
-        const hue = effectiveHue(s);
         if (hue !== 'w' || def.cls !== 'plain') {
           ctx.save();
           ctx.translate(0, r + 7);
@@ -203,8 +221,12 @@ export function makeShadeRenderer() {
     const age = dead ? clamp((t - (s.diedAt ?? t)) / 1.2, 0, 1) : 0;
     const r = s.r;
     const hue = effectiveHue(s);
+    const rot = !!opts.rot;
+    const hx = rot ? s.hy : s.hx;
+    const hy = rot ? -s.hx : s.hy;
     ctx.save();
     ctx.translate(s.x, s.y);
+    if (rot) ctx.rotate(Math.PI / 2);
     if (dead) ctx.globalAlpha = 1 - age;
     const bleed = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 2.4);
     bleed.addColorStop(0, 'rgba(5,6,10,0.7)');
@@ -234,11 +256,11 @@ export function makeShadeRenderer() {
       }
     } else if (s.type === 'lenseater') {
       // One great eye, open or shut, toward where it walks.
-      const ex = s.hx * (r - 10);
-      const ey = s.hy * (r - 10);
+      const ex = hx * (r - 10);
+      const ey = hy * (r - 10);
       ctx.fillStyle = s.eye ? PALETTE.bone : 'rgba(239,230,200,0.25)';
       ctx.beginPath();
-      ctx.ellipse(ex, ey, 10, s.eye ? 10 : 2, Math.atan2(s.hy, s.hx), 0, Math.PI * 2);
+      ctx.ellipse(ex, ey, 10, s.eye ? 10 : 2, Math.atan2(hy, hx), 0, Math.PI * 2);
       ctx.fill();
       if (s.eye) {
         ctx.fillStyle = PALETTE.ink;
@@ -249,7 +271,7 @@ export function makeShadeRenderer() {
       // Teeth along the front.
       ctx.fillStyle = PALETTE.bone;
       for (let i = -2; i <= 2; i++) {
-        const a = Math.atan2(s.hy, s.hx) + i * 0.25;
+        const a = Math.atan2(hy, hx) + i * 0.25;
         ctx.beginPath();
         ctx.moveTo(Math.cos(a - 0.08) * r, Math.sin(a - 0.08) * r);
         ctx.lineTo(Math.cos(a) * (r - 9), Math.sin(a) * (r - 9));
@@ -296,10 +318,16 @@ export function makeShadeRenderer() {
   }
 
   /** Eyes in the dark at an arc, a few seconds before a wave's Shades step in. */
-  function drawTelegraph(ctx, arc, upcoming, t) {
+  function drawTelegraph(ctx, arc, upcoming, t, rot = 0) {
     if (!upcoming.length) return;
     const strength = clamp(1 - Math.min(...upcoming.map((u) => u.in)) / 4, 0.1, 1);
     ctx.save();
+    if (rot) {
+      // Eyes stay level on a turned table: draw about the arc in screen-aligned axes.
+      ctx.translate(arc.x, arc.y);
+      ctx.rotate(Math.PI / 2);
+      ctx.translate(-arc.x, -arc.y);
+    }
     const g = ctx.createRadialGradient(arc.x, arc.y, 10, arc.x, arc.y, 120);
     g.addColorStop(0, `rgba(5,6,10,${0.55 * strength})`);
     g.addColorStop(1, 'rgba(5,6,10,0)');
@@ -311,8 +339,8 @@ export function makeShadeRenderer() {
     for (let i = 0; i < Math.min(5, upcoming.length); i++) {
       const u = upcoming[i];
       const k = i * 1.7 + u.in;
-      const x = arc.x + Math.cos(k * 1.3) * 34 - arc.ux * 10 * i;
-      const y = arc.y + Math.sin(k * 0.9) * 22 - arc.uy * 10 * i;
+      const x = arc.x + Math.cos(k * 1.3) * 34 - (rot ? arc.uy : arc.ux) * 10 * i;
+      const y = arc.y + Math.sin(k * 0.9) * 22 - (rot ? -arc.ux : arc.uy) * 10 * i;
       const blink = Math.sin(t * 3 + i) > -0.6;
       ctx.beginPath();
       ctx.ellipse(x - 3, y, 1.8, blink ? 1.8 : 0.4, 0, 0, Math.PI * 2);

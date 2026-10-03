@@ -6,6 +6,7 @@ import { platform } from './platform.js';
 import { SHADE_IDS } from './sim/shades.js';
 import { FELTS, BRASSES } from './render/felt.js';
 import { finite, clamp } from './sim/geom.js';
+import { ROLE_IDS } from './sim/run.js';
 
 export const PROFILE_VERSION = 1;
 const KEY = 'profile';
@@ -35,6 +36,7 @@ export function defaultProfile() {
     lastKit: 'observer',
     lastBoard: 'octagon',
     lastAscension: 0,
+    lastRole: 'seer', // every Optician brings a role; a first one is given
   };
 }
 
@@ -72,6 +74,7 @@ export function parseProfile(raw) {
   if (typeof raw.lastKit === 'string' && raw.lastKit.length < 16) p.lastKit = raw.lastKit;
   if (typeof raw.lastBoard === 'string' && raw.lastBoard.length < 16) p.lastBoard = raw.lastBoard;
   p.lastAscension = clamp(finite(raw.lastAscension, 0), 0, 8) | 0;
+  if (ROLE_IDS.includes(raw.lastRole)) p.lastRole = raw.lastRole;
   return p;
 }
 

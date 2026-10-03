@@ -7,6 +7,19 @@ import { pieceAngle, shutterOpen } from '../sim/trace.js';
 import { DEG, clamp } from '../sim/geom.js';
 import { PALETTE, BRASSES } from './felt.js';
 
+// Safari before 16 has no roundRect: without it every piece would throw inside the frame loop.
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function roundRect(x, y, w, h, r = 0) {
+    const rr = Math.max(0, Math.min(Number(r) || 0, Math.abs(w) / 2, Math.abs(h) / 2));
+    this.moveTo(x + rr, y);
+    this.arcTo(x + w, y, x + w, y + h, rr);
+    this.arcTo(x + w, y + h, x, y + h, rr);
+    this.arcTo(x, y + h, x, y, rr);
+    this.arcTo(x, y, x + w, y, rr);
+    this.closePath();
+  };
+}
+
 const GLASS = 'rgba(190,230,240,0.42)';
 const GLASS_EDGE = 'rgba(230,250,255,0.9)';
 const GLASS_DARK = 'rgba(40,70,90,0.55)';

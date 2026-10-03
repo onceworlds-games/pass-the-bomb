@@ -6,6 +6,9 @@ import { PALETTE } from './felt.js';
 import { finite } from '../sim/geom.js';
 
 const RGB = { r: [255, 93, 77], g: [107, 255, 143], b: [93, 180, 255], core: [255, 244, 214] };
+// The beam cosmetic: what white light looks like (colours keep their meaning, so only white changes).
+const WHITES = { classic: { core: [255, 244, 214], width: 1 }, thread: { core: [232, 244, 255], width: 0.72 }, ember: { core: [255, 214, 176], width: 1.12 } };
+let white = WHITES.classic;
 
 /** The display colour of a beam from its channel powers: [r, g, b] 0-255 plus whether it reads as white. */
 export function beamColour(seg) {
@@ -13,9 +16,9 @@ export function beamColour(seg) {
   const g = Math.max(0, finite(seg.g));
   const b = Math.max(0, finite(seg.b));
   const P = r + g + b;
-  if (!(P > 0)) return { rgb: RGB.core, white: true };
+  if (!(P > 0)) return { rgb: white.core, white: true };
   const mn = Math.min(r, g, b) / P;
-  if (mn > 0.25) return { rgb: RGB.core, white: true };
+  if (mn > 0.25) return { rgb: white.core, white: true };
   const out = [0, 0, 0];
   for (let i = 0; i < 3; i++) out[i] = (RGB.r[i] * r + RGB.g[i] * g + RGB.b[i] * b) / P;
   // A pure colour stays vivid; a mix drifts toward the gold core.
@@ -68,6 +71,7 @@ export function makeBeamRenderer() {
    * quality ('low'|'medium'|'high'), dawn (boolean), dt (seconds), reduced (motion), intensity (0..1 fade-in).
    */
   function draw(ctx, segments, view, opts) {
+    white = WHITES[opts.style] || WHITES.classic;
     const q = opts.quality || 'high';
     const dawn = opts.dawn ? 1.55 : 1;
     const boost = (opts.intensity ?? 1) * dawn;
@@ -95,8 +99,9 @@ export function makeBeamRenderer() {
       ctx.fillStyle = css(col.rgb, 0.5 * boost * k);
       quad(ctx, seg, seg.w0 * 1.3 + 1.5, seg.w1 * 1.3 + 1.5);
       ctx.fill();
-      ctx.fillStyle = css(col.white ? RGB.core : mixCore(col.rgb), (0.55 + 0.4 * k) * Math.min(1, boost));
-      quad(ctx, seg, Math.max(1.2, seg.w0 * 0.55), Math.max(1.2, seg.w1 * 0.55));
+      const cw = col.white ? 0.55 * white.width : 0.55;
+      ctx.fillStyle = css(col.white ? white.core : mixCore(col.rgb), (0.55 + 0.4 * k) * Math.min(1, boost));
+      quad(ctx, seg, Math.max(1.2, seg.w0 * cw), Math.max(1.2, seg.w1 * cw));
       ctx.fill();
       if (seg.end === 'focus') {
         // The burning point.
@@ -169,7 +174,8 @@ export function makeBeamRenderer() {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, glow.width, glow.height);
     const s = view.scale / 4;
-    g.setTransform(s, 0, 0, s, view.ox / 4, view.oy / 4);
+    if (view.rot) g.setTransform(0, -s, s, 0, view.ox / 4, view.oy / 4);
+    else g.setTransform(s, 0, 0, s, view.ox / 4, view.oy / 4);
     g.globalCompositeOperation = 'lighter';
     for (const seg of segments) {
       const P = seg.r + seg.g + seg.b;
@@ -223,12 +229,18 @@ export function makeBeamRenderer() {
         const mx = (seg.x0 + seg.x1) / 2;
         const my = (seg.y0 + seg.y1) / 2;
         const label = String(Math.round(P));
+        ctx.save();
+        if (opts.upright) opts.upright(ctx, mx, my);
+        else ctx.translate(mx, my);
+        const k = (opts.fontSize || 13) / 13;
         ctx.fillStyle = 'rgba(5,6,10,0.75)';
         ctx.beginPath();
-        ctx.roundRect(mx - 14, my - 9, 28, 18, 5);
+        if (ctx.roundRect) ctx.roundRect(-14 * k, -9 * k, 28 * k, 18 * k, 5 * k);
+        else ctx.rect(-14 * k, -9 * k, 28 * k, 18 * k);
         ctx.fill();
         ctx.fillStyle = PALETTE.bone;
-        ctx.fillText(label, mx, my + 0.5);
+        ctx.fillText(label, 0, 0.5 * k);
+        ctx.restore();
       }
     }
     ctx.restore();
