@@ -97,19 +97,21 @@ export function makeMusic(ctx, out) {
   function update(dt, night) {
     state = night;
     const t = ctx.currentTime;
-    const want = !night || paused ? 0 : night.phase === 'dusk' ? 0.35 : night.phase === 'done' || night.phase === 'lost' ? 0.2 : 0.55;
+    const want = !night || paused ? 0 : night.phase === 'rest' ? 0.22 : night.phase === 'dusk' ? 0.35 : night.phase === 'done' || night.phase === 'lost' ? 0.2 : 0.55;
     level += (want - level) * Math.min(1, dt * 0.8);
     bus.gain.setTargetAtTime(level, t, 0.3);
     if (!night || paused) return;
     // Schedule notes a little ahead of time.
     const danger = night.danger || 0;
-    const beat = night.phase === 'dusk' ? 0.62 : 0.5 - danger * 0.12;
+    const calm = night.phase === 'dusk' || night.phase === 'rest';
+    const beat = night.phase === 'rest' ? 0.72 : calm ? 0.62 : 0.5 - danger * 0.12;
     while (nextNote < t + 0.25) {
-      if (nextNote < t) nextNote = t + 0.05;
+      // Never schedule into the past (a context that has not started yet stands at 0).
+      if (nextNote < t + 0.03) nextNote = t + 0.05;
       const ch = CHORDS[chord];
       const noteIndex = step % 8;
       const semis = ch[[0, 1, 2, 3, 2, 1, 3, 0][noteIndex]] + (noteIndex >= 4 ? 12 : 0);
-      const freq = ROOT * Math.pow(2, semis / 12) * (night.phase === 'dusk' ? 0.5 : 1);
+      const freq = ROOT * Math.pow(2, semis / 12) * (calm ? 0.5 : 1);
       const swing = (rnd() - 0.5) * 0.03;
       if (noteIndex % 2 === 0 || danger > 0.3 || rnd() < 0.5) celesta(freq * Math.pow(2, (rnd() - 0.5) * 0.004), nextNote + swing, 0.09 + danger * 0.04);
       // A second voice above as danger rises; a pad below at the bar.

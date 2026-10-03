@@ -84,13 +84,20 @@ export function makeAudio() {
     mod.stop(t + dur + 0.1);
   }
 
+  // One shared two-second noise buffer, played from a random offset: no allocation per sound.
+  let noiseBuf = null;
   function noise(t, dur, vol, filterType = 'bandpass', freq = 2000, q = 1) {
-    const len = Math.ceil(ctx.sampleRate * dur);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = rnd() * 2 - 1;
+    if (!noiseBuf) {
+      const len = Math.ceil(ctx.sampleRate * 2);
+      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = rnd() * 2 - 1;
+    }
     const src = ctx.createBufferSource();
-    src.buffer = buf;
+    src.buffer = noiseBuf;
+    src.loop = true;
+    src.loopStart = 0;
+    src.loopEnd = 2;
     const f = ctx.createBiquadFilter();
     f.type = filterType;
     f.frequency.value = freq;
@@ -100,7 +107,7 @@ export function makeAudio() {
     f.connect(g);
     g.connect(sfxBus);
     env(g, t, 0.005, dur * 0.4, 0.3, dur * 0.6, vol);
-    src.start(t);
+    src.start(t, rnd() * 1.5);
     src.stop(t + dur + 0.05);
     return f;
   }
@@ -196,6 +203,8 @@ export function makeAudio() {
       const f = noise(t, o.big ? 0.9 : 0.32, o.big ? 0.4 : 0.22, 'bandpass', vary(o.hue === 'b' ? 3200 : o.hue === 'g' ? 2400 : 1800, 120), 1.4);
       f.frequency.exponentialRampToValueAtTime(600, t + (o.big ? 0.9 : 0.3));
       bell(vary(o.big ? 220 : 1760, 60), t, o.big ? 1.6 : 0.4, o.big ? 0.3 : 0.08, 2.0, 1.0);
+      // The colour it wanted rings a bright fifth above: matching is heard as well as seen.
+      if (o.match && !o.big) bell(vary(2637, 30), t + 0.04, 0.5, 0.06, 3.0, 1.4);
     },
     bossdown() {
       const t = now();
@@ -284,6 +293,7 @@ export function makeAudio() {
   };
 
   const now = () => ctx.currentTime + 0.005;
+  const REST = { phase: 'rest', danger: 0, boss: false };
 
   function play(name, opts = {}) {
     if (!unlocked || !ctx || hidden) return;
@@ -301,8 +311,17 @@ export function makeAudio() {
   // ---- continuous layers -----------------------------------------------------------------------------------
   let tickAcc = 0;
   let lastTickAt = 0;
-  function tick(dt, night) {
+  /** One call per frame: `night` is the table's state (null between nights, where `rest` keeps a quiet music box). */
+  function tick(dt, night, rest = false) {
     if (!unlocked || !ctx) return;
+    try {
+      layers(dt, night, rest);
+    } catch (e) {
+      // Sound must never stop a frame; a layer that fails is skipped until the next one.
+    }
+  }
+
+  function layers(dt, night, rest) {
     const t = ctx.currentTime;
     const target = night && !hidden ? night.power * 0.22 : 0;
     hum.g.gain.setTargetAtTime(target, t, 0.12);
@@ -327,7 +346,7 @@ export function makeAudio() {
       music.update(dt, night);
     } else {
       drone.g.gain.setTargetAtTime(0, t, 0.4);
-      music.update(dt, null);
+      music.update(dt, rest && !hidden ? REST : null);
     }
   }
 
