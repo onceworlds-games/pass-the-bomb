@@ -627,9 +627,11 @@ button:focus-visible {
   pointer-events: none;
   white-space: nowrap;
 }
+/* Held upright the forecast takes the top, so hints sit just above the tray and toasts above them. */
 @media (max-aspect-ratio: 4/5) {
   .hint {
-    top: calc(150px + var(--safe-top));
+    top: auto;
+    bottom: calc(160px + var(--safe-bottom));
     font-size: 19px;
     white-space: normal;
     text-align: center;
@@ -637,7 +639,7 @@ button:focus-visible {
     max-width: calc(100vw - 32px);
   }
   .toast {
-    bottom: calc(160px + var(--safe-bottom));
+    bottom: calc(214px + var(--safe-bottom));
   }
 }
 @media (min-aspect-ratio: 4/5) and (max-height: 500px) {

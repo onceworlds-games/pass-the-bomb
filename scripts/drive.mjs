@@ -33,11 +33,11 @@ const key = async (k) => {
   await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k });
 };
 const clickText = async (text) => {
-  const r = await b.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith(${JSON.stringify(text)})); if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+  const r = await b.evaluate(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith(${JSON.stringify(text)})); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
   if (!r) throw new Error(`no button ${text}`);
   await click(r[0], r[1]);
 };
-const cellXY = async (c, r) => b.evaluate(`(() => { const v = window.__glint.scene.view; return [v.ox + (${c} + 0.5) * 64 * v.scale, v.oy + (${r} + 0.5) * 64 * v.scale]; })()`);
+const cellXY = async (c, r) => b.evaluate(`(() => { const p = window.__glint.scene.toScreen((${c} + 0.5) * 64, (${r} + 0.5) * 64); return [p.x, p.y]; })()`);
 
 await b.send('Page.navigate', { url: `http://127.0.0.1:${port}/index.html?debug` });
 await sleep(1500);
