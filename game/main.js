@@ -434,6 +434,9 @@ async function boot() {
     hud.hide();
     hints.hide();
     platform.controls.clear();
+    // An unfinished run from an earlier visit is the table's run until the host abandons it: the strip's Start then
+    // continues it instead of quietly starting a new one over the save.
+    if (session.isHost() && !session.currentRun() && session.S.savedRun) session.continueRun();
     const R = session.currentRun();
     if (app.screen !== 'lobby') {
       app.screen = 'lobby';

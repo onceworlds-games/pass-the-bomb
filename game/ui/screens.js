@@ -189,7 +189,7 @@ export function makeScreens(root) {
         const row = el('div', 'go');
         if (v.standalone) row.append(btn('brass-btn big', `Night ${R.night}`, v.onStart));
         else row.append(el('p', 'cue', 'Start below'));
-        row.append(btn('brass-btn quiet', 'Abandon', v.onAbandon));
+        row.append(twoTaps('Abandon', 'Abandon the run?', v.onAbandon));
         p.append(row);
       } else p.append(cue('Ready below'));
       return;
@@ -470,6 +470,28 @@ export function makeScreens(root) {
       row.append(btn('brass-btn big', label, onAgain));
       p.append(row);
     });
+  }
+
+  /** A button that asks once more before it does something that cannot be taken back. */
+  function twoTaps(label, ask, onSure) {
+    const b = btn('brass-btn quiet', label);
+    let armed = 0;
+    b.addEventListener('click', () => {
+      if (armed) {
+        clearTimeout(armed);
+        armed = 0;
+        onSure();
+        return;
+      }
+      b.textContent = ask;
+      b.classList.add('ask');
+      armed = setTimeout(() => {
+        armed = 0;
+        b.textContent = label;
+        b.classList.remove('ask');
+      }, 3000);
+    });
+    return b;
   }
 
   /** The button that plays the night's last seconds again. */

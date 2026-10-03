@@ -844,6 +844,13 @@
   }
 }
 
+/* A second tap is needed: the button turns to the question in the red of the margin. */
+.brass-btn.ask {
+  background: linear-gradient(180deg, #8a2a20, #5a1610);
+  color: var(--bone);
+  border-color: #2a0804;
+}
+
 /* A replay: the table, and one plate at the top with the way back. */
 .screen.replay {
   background: radial-gradient(ellipse at 50% 50%, rgba(5, 6, 10, 0), rgba(5, 6, 10, 0.45));
