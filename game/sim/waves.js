@@ -95,7 +95,8 @@ export function planNight({ seed, night, board, ascension = 0, tutorial = false 
   const waves = [];
   const types = pool(night, ascension);
   for (let i = 0; i < W; i++) {
-    const budget = (total * shares[i]) / sum;
+    // The boss is most of its wave: its escorts are a light wave, not a full one.
+    const budget = ((total * shares[i]) / sum) * (boss && i === W - 1 ? 0.5 : 1);
     const dur = waveDuration(night);
     const hueCount = night >= 4 ? rng.int(1, 2) : 1;
     const hues = rng.shuffle([...HUES]).slice(0, hueCount);

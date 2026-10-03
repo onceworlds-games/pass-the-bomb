@@ -360,7 +360,7 @@ function randomLayout(N, rng) {
  * A bot for one night. kind: 'random' | 'hill' | 'colour'. Call atDusk() once, then during(dt) each tick.
  */
 export function makeBot(kind, N, pid, rng, opts = {}) {
-  const iterations = opts.iterations ?? (kind === 'colour' ? 140 : 100);
+  const iterations = opts.iterations ?? (kind === 'colour' ? 240 : 100);
   const colour = kind === 'colour';
   const fc = forecast(N.plan, colour && N.mods.forecastAll);
   const hues = colour ? fc.hues : [];
@@ -381,7 +381,7 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
     const cur = cloneLayout(N);
     const evalFn = (L) => evaluateLayout(N, L.pieces, L.lamps, wHues, w.arcs, { locked: wLocked, targets });
     const saved = iterations;
-    const { layout } = search(cur, evalFn, Math.round(saved * 0.45), w.arcs, wHues);
+    const { layout } = search(cur, evalFn, Math.round(saved * (colour ? 0.7 : 0.45)), w.arcs, wHues);
     for (let i = 0; i < layout.pieces.length; i++) {
       const a = cur.pieces[i];
       const b = layout.pieces[i];

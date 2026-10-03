@@ -4,7 +4,7 @@
 export const RELICS = {
   'polished-brass': { name: 'Polished Brass', text: 'Mirrors keep 98% of the light.', apply: (m) => (m.mirrorKeep = Math.max(m.mirrorKeep, 0.98)) },
   'cold-hands': { name: 'Cold Hands', text: 'Glass cools 40% faster.', apply: (m) => (m.cooling *= 1.4) },
-  'lamp-oil': { name: 'Lamp Oil', text: 'Lamp power +15%.', apply: (m) => (m.lampPower *= 1.15) },
+  'lamp-oil': { name: 'Lamp Oil', text: 'Lamp power +10%.', apply: (m) => (m.lampPower *= 1.1) },
   'second-sight': { name: 'Second Sight', text: 'The forecast shows every wave of the night.', apply: (m) => (m.forecastAll = true) },
   'star-chart': { name: 'Star Chart', text: 'Your first placement each wave is free.', apply: (m) => (m.freeFirstPlacement = true) },
   'dichroic-glass': { name: 'Dichroic Glass', text: 'Prisms add a fourth, white beam.', apply: (m) => (m.prismWhite = 0.25) },
@@ -13,9 +13,9 @@ export const RELICS = {
   quicksilver: { name: 'Quicksilver', text: 'Focus returns 3 a second faster.', apply: (m) => (m.focusRegen += 3) },
   'deep-well': { name: 'Deep Well', text: 'Focus holds 150.', apply: (m) => (m.focusMax = Math.max(m.focusMax, 150)) },
   'long-breath': { name: 'Long Breath', text: 'The Lamp breathes gently: 0.8 to 1.2.', apply: (m) => ((m.breathLow = 0.8), (m.breathHigh = 1.2)) },
-  'lantern-ring': { name: 'Lantern Ring', text: 'Heart +25, now and at most.', apply: (m) => (m.heartHp += 25), heal: 25 },
+  'lantern-ring': { name: 'Lantern Ring', text: 'Heart +15, now and at most.', apply: (m) => (m.heartHp += 15), heal: 15 },
   'ash-ward': { name: 'Ash Ward', text: 'Flare returns 8 s sooner and reaches a cell further.', apply: (m) => ((m.flareCd = Math.max(6, m.flareCd - 8)), (m.flareRadius += 1)) },
-  'tinted-monocle': { name: 'Tinted Monocle', text: 'A matching colour burns harder.', apply: (m) => (m.matchBonus += 0.35) },
+  'tinted-monocle': { name: 'Tinted Monocle', text: 'A matching colour burns harder.', apply: (m) => (m.matchBonus += 0.25) },
   'half-silver': { name: 'Half-Silver', text: 'Splitters lose nothing.', apply: (m) => (m.splitterKeep = 1) },
   'ember-heart': { name: 'Ember Heart', text: 'The Dawn meter fills twice as fast.', apply: (m) => (m.dawnRate *= 2) },
   'night-eyes': { name: 'Night Eyes', text: 'Light slows Shades more.', apply: (m) => (m.lightSlow = Math.min(0.85, m.lightSlow + 0.2)) },
@@ -23,9 +23,9 @@ export const RELICS = {
   'jewellers-loupe': { name: "Jeweller's Loupe", text: 'A focus burns 30% harder.', apply: (m) => (m.lensBoost *= 1.3) },
   firebrand: { name: 'Firebrand', text: 'Crystal pulses 50% stronger.', apply: (m) => (m.crystalBoost *= 1.5) },
   'clockwork-key': { name: 'Clockwork Key', text: 'Rotors turn twice as fast; shutters stay open longer.', apply: (m) => ((m.rotorSpeed *= 2), (m.shutterOpen = 1.5)) },
-  'thick-felt': { name: 'Thick Felt', text: 'The Heart takes 25% less.', apply: (m) => (m.heartArmor = Math.min(0.9, m.heartArmor + 0.25)) },
+  'thick-felt': { name: 'Thick Felt', text: 'The Heart takes 15% less.', apply: (m) => (m.heartArmor = Math.min(0.9, m.heartArmor + 0.15)) },
   'black-ledger': { name: 'Black Ledger', text: 'Score +50%.', apply: (m) => (m.scoreMult *= 1.5) },
-  'widows-lamp': { name: "Widow's Lamp", text: 'A second Lamp across the table, at 60%.', apply: (m) => (m.extraLamp = Math.max(m.extraLamp, 0.6)) },
+  'widows-lamp': { name: "Widow's Lamp", text: 'A second Lamp across the table, at 45%.', apply: (m) => (m.extraLamp = Math.max(m.extraLamp, 0.45)) },
 };
 export const RELIC_IDS = Object.keys(RELICS);
 

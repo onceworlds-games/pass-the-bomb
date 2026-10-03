@@ -18,7 +18,7 @@ export const SHADES = {
   moth: { id: 'moth', name: 'Moth', hp: 40, speed: 70, radius: 12, dmg: 4, cls: 'plain', flee: 0, score: 25, cost: 20, night: 7, seeks: true, hardened: true, note: 'Flies up the brightest beam to its source and smothers the Lamp.' },
   umbra: { id: 'umbra', name: 'Umbra', hp: 600, speed: 22, radius: 40, dmg: 40, cls: 'locked', flee: 0, score: 500, cost: 0, night: 4, boss: true, hardened: true, note: 'Casts shadows that swallow beams. Three colours, in turn.' },
   lenseater: { id: 'lenseater', name: 'The Lens-Eater', hp: 900, speed: 30, radius: 44, dmg: 40, cls: 'plain', flee: 0, score: 800, cost: 0, night: 8, boss: true, hardened: true, eye: true, chew: 3, note: 'Eats glass. Only the open eye burns.' },
-  longdusk: { id: 'longdusk', name: 'The Long Dusk', hp: 1200, speed: 0, radius: 52, dmg: 0, cls: 'locked', flee: 0, score: 1500, cost: 0, night: 12, boss: true, hardened: true, sits: true, note: 'Does not come to you. Darkens the table in waves. Burn it where it sits.' },
+  longdusk: { id: 'longdusk', name: 'The Long Dusk', hp: 1000, speed: 0, radius: 52, dmg: 0, cls: 'locked', flee: 0, score: 1500, cost: 0, night: 12, boss: true, hardened: true, sits: true, note: 'Does not come to you. Darkens the table in waves. Burn it where it sits.' },
 };
 
 export const SHADE_IDS = Object.keys(SHADES);

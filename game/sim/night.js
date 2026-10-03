@@ -481,8 +481,9 @@ export function createNight(cfg) {
           ev('flicker', { id: s.id });
         }
         if (S.t >= (s.escortAt || 0) && aliveCount() < 25) {
+          // Its escorts are small things in its colour: Wisps, Gnats, halves. The Dusk itself is the threat.
           s.escortAt = S.t + 12;
-          const picks = plan.waves[S.wave]?.entries.filter((e) => !SHADES[e.type].boss) || [];
+          const picks = plan.waves[S.wave]?.entries.filter((e) => !SHADES[e.type].boss && SHADES[e.type].cost <= 8) || [];
           const e = picks.length ? rng.pick(picks) : { type: 'wisp', hue: 'r', arc: s.arc };
           for (let k = 0; k < 2; k++) spawnOne({ type: e.type, hue: HUES[s.phase], arc: rng.int(0, board.arcs.length - 1) });
         }
