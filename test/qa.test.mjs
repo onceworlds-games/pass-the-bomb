@@ -125,3 +125,20 @@ test('the replay keeps the last fourteen seconds and plays them back with beams 
   rec.clear();
   assert.equal(rec.span, null);
 });
+
+test('the lanes and the forecast read one wave ahead, and every wave with Second Sight', async () => {
+  const { laneForecast, forecastText, listing } = await import('../game/ui/forecast.js');
+  const plain = createNight({ seed: 8, night: 6, board, deck, players: [{ id: 'a' }] });
+  const sight = createNight({ seed: 8, night: 6, board, deck, players: [{ id: 'a' }], mods: { forecastAll: true } });
+  const a = laneForecast(plain);
+  const b = laneForecast(sight);
+  assert.ok(a.lanes.length >= 1 && a.lanes.every((l) => !l.faint), 'dusk shows the first wave');
+  assert.deepEqual(new Set(a.lanes.map((l) => l.arc)), new Set(plain.plan.waves[0].entries.map((e) => e.arc)));
+  assert.ok(b.lanes.some((l) => l.faint), 'Second Sight shows later waves, faint');
+  assert.ok(!/Then/.test(forecastText(plain)) && /Then/.test(forecastText(sight)));
+  assert.equal(listing(['north']), 'north');
+  assert.equal(listing(['north', 'east', 'south']), 'north, east and south');
+  // During a wave, without Second Sight, nothing is forecast on the table.
+  plain.command('a', { op: 'wave' });
+  assert.equal(laneForecast(plain), null);
+});
