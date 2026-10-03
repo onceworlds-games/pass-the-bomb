@@ -21,7 +21,6 @@
     { "keys": ["Alt"], "action": "Show every beam's power" },
     { "keys": ["+", "-"], "action": "Zoom the table" }
   ],
-  "help": "Route the Lamp's beam through glass so it lies along the lanes the Shades walk. Mirrors bounce, splitters halve, prisms fan into colours, lenses focus to a burning point, a concave lens spreads light into a fence. Matching colour burns hardest; Veils ignore white. Too much light on one piece cracks it. At dusk changes are free; at night they cost Focus. Undo takes back your last one.",
   "badges": [
     { "id": "first-burn", "name": "First Burn", "description": "Burn a Shade.", "icon": "store/badges/first-burn.png" },
     { "id": "rainbow", "name": "Rainbow", "description": "Burn Shades with red, green and blue light in one night.", "icon": "store/badges/rainbow.png" },
