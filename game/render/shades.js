@@ -186,12 +186,14 @@ export function makeShadeRenderer() {
           ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
         }
-        // Health, only once hurt: a thin bone arc.
-        if (s.hp < s.maxHp - 0.5) {
-          ctx.strokeStyle = 'rgba(239,230,200,0.8)';
-          ctx.lineWidth = 2;
+        // Health, once it has really been hurt: a thin bone arc of what is left, faint, so a crowd does not
+        // become a field of rings.
+        const left = clamp(s.hp / s.maxHp, 0, 1);
+        if (left < 0.94) {
+          ctx.strokeStyle = 'rgba(239,230,200,0.55)';
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.arc(0, 0, r + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(s.hp / s.maxHp, 0, 1));
+          ctx.arc(0, 0, r + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
           ctx.stroke();
         }
       }

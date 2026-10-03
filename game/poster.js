@@ -29,21 +29,26 @@ const spawn = (N, type, hue, x, y, hp = 1) => {
 
 const SCENES = {
   thumb1(N) {
-    // A finished machine: the lamp through a splitter and a prism fan onto a swarm coming from the east.
+    // A finished machine: the Lamp splits; one half fans into colour across the ink coming from the east, the
+    // other runs the north through a lens and turns down the east side in a wide wash.
     place(N, 'splitter', 4, 6, 45);
     place(N, 'mirror', 4, 9, 45);
     place(N, 'prism', 9, 9, 100);
     place(N, 'mirror', 7, 6, 135);
-    place(N, 'mirror', 7, 3, 45);
-    place(N, 'lens', 12, 3, 90);
-    place(N, 'mirror', 15, 3, 135);
-    place(N, 'heatsink', 5, 7, 0);
+    place(N, 'mirror', 7, 3, 135);
+    place(N, 'lens', 11, 3, 90);
+    place(N, 'mirror', 16, 3, 45);
     N.command('p', { op: 'lamp', i: 0, angle: 0 });
-    for (let i = 0; i < 14; i++) spawn(N, 'gnat', 'r', 1200 - i * 28, 600 + Math.sin(i) * 40, 1);
-    for (let i = 0; i < 3; i++) spawn(N, 'creeper', 'r', 1000 + i * 90, 240 + i * 20);
-    spawn(N, 'veil', 'g', 760, 620);
-    spawn(N, 'wisp', 'w', 980, 420);
-    spawn(N, 'wisp', 'w', 1040, 470);
+    // Along the fan: red Creepers in the red, a blue Veil in the blue, a swarm of gnats in the green.
+    for (let i = 0; i < 3; i++) spawn(N, 'creeper', 'r', 1010 + i * 105, 545 - i * 25);
+    spawn(N, 'veil', 'b', 980, 455);
+    spawn(N, 'veil', 'b', 1180, 410);
+    for (let i = 0; i < 12; i++) spawn(N, 'gnat', 'g', 860 + i * 30, 520 + Math.sin(i * 1.7) * 18, 1);
+    // Wading through the wash on the east side.
+    spawn(N, 'twain', 'g', 1060, 330);
+    spawn(N, 'wisp', 'w', 1110, 760);
+    spawn(N, 'wisp', 'w', 1220, 690);
+    spawn(N, 'creeper', 'g', 1290, 230);
   },
   thumb2(N) {
     // The focus burn: the prism's red leaves through a filter and a lens, to a burning point on a Veil.
