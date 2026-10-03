@@ -102,3 +102,26 @@ test('light a concave lens has spread holds ink: a Shade wades through it slower
   assert.ok(fence.d < plain.d * 0.6, `slower in the fence: ${fence.d.toFixed(1)} px vs ${plain.d.toFixed(1)} px in a second`);
   assert.ok(WIDE_HOLD > 0 && WIDE_HOLD < 1);
 });
+
+test('the replay keeps the last fourteen seconds and plays them back with beams and burns', async () => {
+  const { makeRecorder } = await import('../game/render/replay.js');
+  const rec = makeRecorder();
+  const N = mk();
+  N.command('a', { op: 'place', type: 'mirror', c: 3, r: 6, angle: 45 });
+  N.command('a', { op: 'wave' });
+  for (let i = 0; i < 30 * 20; i++) {
+    N.tick();
+    for (const e of N.drainEvents()) rec.event(e, N.S.t);
+    rec.capture(N);
+  }
+  const span = rec.span;
+  assert.ok(span && span.to - span.from <= 14.2 && span.to - span.from > 13, JSON.stringify(span));
+  const mid = rec.at((span.from + span.to) / 2);
+  assert.ok(mid.segments.length > 0, 'beams re-traced');
+  assert.equal(mid.pieces.length, 1);
+  assert.ok(mid.shades.every((s) => Number.isFinite(s.x) && Number.isFinite(s.y)));
+  assert.equal(rec.at(span.from - 5)?.t, span.from - 5, 'a time before the record still draws its first frame');
+  assert.ok(rec.eventsBetween(span.from, span.to).every((e) => e.t > span.from && e.t <= span.to));
+  rec.clear();
+  assert.equal(rec.span, null);
+});
