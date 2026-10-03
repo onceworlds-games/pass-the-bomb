@@ -568,7 +568,7 @@ async function boot() {
       }
       if (N && !app.closed) {
         if (app.screen !== 'play') showPlay();
-        drawNight(N, shake);
+        drawNight(N, dt, shake);
         audio.tick(dt, nightAudio(N));
       } else {
         if (scene.board) {
@@ -589,7 +589,7 @@ async function boot() {
     }
   }
 
-  function drawNight(N, shake) {
+  function drawNight(N, dt, shake) {
     const S = N.S;
     const segments = session.segments();
     const sel = input.selected;
