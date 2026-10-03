@@ -1,6 +1,6 @@
 // Three guests on the local platform: the title, the lobby, a night, a guest's glass and lies, Undo, a reload of a
 // guest and of the host, a dropped connection, the change of host, the old host back as a player, and a fourth
-// friend who arrives mid-night and watches. Screens in /tmp/glint-mp.
+// friend who arrives mid-night, watches, and takes a seat at the next break. Screens in /tmp/glint-mp.
 //   node scripts/mp.mjs   (after deploying the folder to the local platform)
 import { launch } from '/Users/gowravthota/Desktop/commit/onceworlds-games/_tools/mp-lib.mjs';
 import { mkdirSync } from 'node:fs';
@@ -94,6 +94,9 @@ try {
   await clickText(P[3], 'Play');
   check('a latecomer watches', await until(async () => (await P[3].frame(R('r.spectating'))) === true && /screen watching/.test(await hud(P[3])), 15000));
   await P[3].shot(`${OUT}/mp-watching.png`);
+  // At the next break between waves the host seats them.
+  check('the latecomer takes a seat between waves', await until(async () => (await P[3].frame(R('r.spectating'))) === false && /Night 1/.test(await hud(P[3])), 90000));
+  await P[3].shot(`${OUT}/mp-seated.png`);
   const errs = P.map((p) => p.errors.length);
   check('no uncaught errors', errs.every((n) => n === 0), errs.join(','));
   const warn = await Promise.all(P.map((p) => p.logs.filter((l) => /waiting|dropped/.test(l)).length));
