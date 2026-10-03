@@ -1,6 +1,6 @@
 // Loads the game standalone in headless Chrome, lets ?test drive it through a night, and reports every
 // console error and uncaught exception. Screenshots at two sizes.
-//   node scripts/smoke.mjs [seconds=40] [--shots]
+//   node scripts/smoke.mjs [seconds=40] [--shots]        SMOKE_QUERY='quality=low&reduced' for those paths
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { serve, launch, sleep } from './cdp.mjs';
 
@@ -16,7 +16,8 @@ b.on((msg) => {
   }
   if (msg.method === 'Log.entryAdded' && msg.params.entry.level === 'error') errors.push(`LOG ${msg.params.entry.text} ${msg.params.entry.url ?? ''}`);
 });
-await b.send('Page.navigate', { url: `http://127.0.0.1:${port}/index.html?test` });
+const extra = process.env.SMOKE_QUERY ? `&${process.env.SMOKE_QUERY}` : '';
+await b.send('Page.navigate', { url: `http://127.0.0.1:${port}/index.html?test${extra}` });
 const t0 = Date.now();
 let lastLine = '';
 mkdirSync('/tmp/glint-smoke', { recursive: true });

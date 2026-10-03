@@ -10,7 +10,7 @@ import { makeScreens } from './ui/screens.js';
 import { createSession } from './net/session.js';
 import { loadProfile, makeProfileStore } from './profile.js';
 import { makeAudio } from './audio/audio.js';
-import { forecast } from './sim/waves.js';
+import { forecast, planNight } from './sim/waves.js';
 import { traceBeams, countColourCrossings } from './sim/trace.js';
 import { dailySetup, dailyDay, endlessNights, RUN_VERSION } from './sim/run.js';
 import { SHADES } from './sim/shades.js';
@@ -50,17 +50,19 @@ async function boot() {
   const profile = makeProfileStore(await loadProfile());
   const app = {
     screen: '',
-    reduced: platform.settings.reducedMotion,
-    quality: platform.settings.quality,
+    // Standalone only (no SDK): ?quality=low|medium|high and ?reduced exercise those paths in the smoke test.
+    reduced: platform.settings.reducedMotion || (!platform.present && params.has('reduced')),
+    quality: (!platform.present && ['low', 'medium', 'high'].includes(params.get('quality')) && params.get('quality')) || platform.settings.quality,
     setup: { kit: profile.p.lastKit, boardId: profile.p.lastBoard, ascension: profile.p.lastAscension, daily: null },
     avatars: new Map(),
     seenLedger: 0,
+    seenRunId: '',
+    closed: false,
     nightKills: { r: 0, g: 0, b: 0 },
     cracked: false,
     lastCross: 0,
     crossAt: 0,
     freeze: 0,
-    started: false,
     lastHintAt: 0,
   };
   platform.controls.clear();
@@ -91,6 +93,7 @@ async function boot() {
       },
       onClose: (reason) => {
         app.screen = 'closed';
+        app.closed = true;
         hud.hide();
         screens.closed(reason, () => rejoin());
         audio.stopAll();
@@ -331,7 +334,12 @@ async function boot() {
     const R = session.currentRun();
     if (!R) {
       app.seenLedger = 0;
+      app.seenRunId = '';
       return;
+    }
+    if (R.id !== app.seenRunId) {
+      app.seenRunId = R.id;
+      app.seenLedger = 0;
     }
     if (R.ledger.length > app.seenLedger) {
       const fresh = R.ledger.slice(app.seenLedger);
@@ -371,7 +379,6 @@ async function boot() {
         if (R.ascension >= 4) badge('ascendant');
       }
     }
-    if (R.phase === 'lost' || R.phase === 'won') app.seenLedger = R.phase === 'lost' ? app.seenLedger : app.seenLedger;
   }
 
   // ---- screens ---------------------------------------------------------------------------------------------
@@ -382,15 +389,12 @@ async function boot() {
   function forecastFor(R) {
     try {
       const board = session.boardOf(R.boardId);
-      const { planNight } = planCache;
       const plan = planNight({ seed: R.seed, night: R.night, board, ascension: R.ascension, tutorial: R.tutorial && R.night === 1 });
       return forecast(plan, false);
     } catch {
       return null;
     }
   }
-  const planCache = await import('./sim/waves.js');
-
   async function refreshAvatars() {
     for (const p of session.roster()) {
       if (app.avatars.has(p.id)) continue;
@@ -466,6 +470,12 @@ async function boot() {
         showLobby();
       },
       onStart: () => startFromObservatory(),
+      onCosmetic: (kind, id) => {
+        profile.set((p) => (p.cosmetics[kind] = id));
+        scene.setCosmetics(profile.p.cosmetics);
+        audio.play('select');
+        showLobby();
+      },
     });
   }
 
@@ -496,6 +506,7 @@ async function boot() {
   /** The room closed (kicked, replaced, lost): one button, and the same join again. */
   async function rejoin() {
     app.screen = '';
+    app.closed = false;
     room = await platform.join(JOIN);
     session = createSession({ room, me, hooks });
     wireRoom();
@@ -547,7 +558,6 @@ async function boot() {
   }
 
   let last = performance.now();
-  let hum = 0;
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = clamp((now - last) / 1000, 0, 0.1);
@@ -561,7 +571,7 @@ async function boot() {
         app.freeze -= dt;
         return;
       }
-      if (N) {
+      if (N && !app.closed) {
         if (app.screen !== 'play') showPlay();
         drawNight(N, dt, shake);
         audio.tick(dt, nightAudio(N));
@@ -574,7 +584,6 @@ async function boot() {
         }
         audio.tick(dt, null);
       }
-      hum += dt;
     } catch (e) {
       // Nothing in the frame may stop the game; a bad frame is logged once per second at most.
       if (!app.lastErr || now - app.lastErr > 1000) {

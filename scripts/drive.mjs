@@ -61,7 +61,8 @@ await click(x, y);
 await sleep(200);
 await shot('selected');
 const v = await b.evaluate('window.__glint.scene.view.scale');
-await drag(x + 58 * v * Math.cos(Math.PI / 4), y + 58 * v * Math.sin(Math.PI / 4), x + 58 * v * Math.cos(Math.PI / 2), y + 58 * v * Math.sin(Math.PI / 2), 6);
+const ring = Math.max(58 * v, 66); // the dial keeps a screen size
+await drag(x + ring * Math.cos(Math.PI / 4), y + ring * Math.sin(Math.PI / 4), x + ring * Math.cos(Math.PI / 2), y + ring * Math.sin(Math.PI / 2), 6);
 await sleep(300);
 await shot('turned');
 await key('e');

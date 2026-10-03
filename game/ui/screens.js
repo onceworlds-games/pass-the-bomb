@@ -365,9 +365,9 @@ export function makeScreens(root, ctx) {
 
   function watching(v) {
     show('watching', (p) => {
-      p.append(el('h2', '', 'Watching'));
       p.append(el('div', 'note', `Night ${v.night}. You join at the next dusk.`));
     });
+    root.classList.add('light');
     root.style.pointerEvents = 'none';
   }
 
@@ -380,6 +380,7 @@ export function makeScreens(root, ctx) {
     watching,
     hide() {
       root.style.pointerEvents = '';
+      root.classList.remove('light');
       hide();
     },
     get current() {

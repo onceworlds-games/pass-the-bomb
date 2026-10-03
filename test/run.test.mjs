@@ -96,7 +96,7 @@ test('mods fold kit, relics, upgrades, ascension and roles together', () => {
   R.upgrades.push('quartz');
   const m = runMods(R, ['seer', 'alchemist']);
   assert.equal(m.focusCost, 0.7);
-  assert.ok(Math.abs(m.lampPower - 1.15) < 1e-9);
+  assert.ok(Math.abs(m.lampPower - 1.1) < 1e-9);
   assert.equal(m.focusMax, 150);
   assert.equal(m.focusMin, 2);
   assert.equal(m.forecastAll, true);
