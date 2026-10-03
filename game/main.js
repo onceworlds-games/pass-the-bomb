@@ -589,6 +589,9 @@ async function boot() {
     return lanes.length ? { lanes } : null;
   }
 
+  /** 'a', 'a and b', 'a, b and c'. */
+  const listing = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
   function forecastText(N) {
     const S = N.S;
     const next = S.phase === 'dusk' ? 0 : S.phase === 'break' ? S.wave + 1 : -1;
@@ -596,16 +599,16 @@ async function boot() {
     if (!w) return '';
     const hueWord = { r: 'red', g: 'green', b: 'blue' };
     const types = [...new Set(w.entries.map((e) => e.type))];
-    const names = types.map((t) => SHADES[t]?.name).filter(Boolean).slice(0, 3).join(', ');
-    const arcs = [...new Set(w.arcs)].map((a) => N.board.arcs[a]?.name).filter(Boolean).join(', ');
+    const names = listing(types.map((t) => SHADES[t]?.name).filter(Boolean).slice(0, 3));
+    const arcs = listing([...new Set(w.arcs)].map((a) => N.board.arcs[a]?.name).filter(Boolean));
     const locked = w.entries.some((e) => SHADES[e.type]?.cls === 'locked');
     const hues = w.hues.map((h) => hueWord[h]).join(' and ');
     let line = `${next === 0 ? `Night ${S.night}.` : `Next:`} ${names} from the ${arcs}.${locked ? ` The Veils want ${hues}.` : w.hues.length && w.entries.some((e) => SHADES[e.type]?.cls === 'tinted') ? ` They want ${hues}.` : ''}`;
     // Second Sight (or a Seer at the table) reads one wave further.
     const then = N.mods.forecastAll ? N.plan.waves[next + 1] : null;
     if (then) {
-      const tn = [...new Set(then.entries.map((e) => e.type))].map((t) => SHADES[t]?.name).filter(Boolean).slice(0, 2).join(', ');
-      const ta = [...new Set(then.arcs)].map((a) => N.board.arcs[a]?.name).filter(Boolean).join(', ');
+      const tn = listing([...new Set(then.entries.map((e) => e.type))].map((t) => SHADES[t]?.name).filter(Boolean).slice(0, 2));
+      const ta = listing([...new Set(then.arcs)].map((a) => N.board.arcs[a]?.name).filter(Boolean));
       line += ` Then ${tn} from the ${ta}.`;
     }
     return line;
@@ -843,7 +846,8 @@ async function boot() {
   platform.on('player', () => app.screen === 'lobby' && showLobby());
 
   // ---- go -------------------------------------------------------------------------------------------------
-  window.__glint = { scene, session, room, profile, input, fx }; // the smoke and store scripts read this
+  // The standalone page (and ?test) hands its parts to the smoke, touch and drive scripts; a played game does not.
+  if (!platform.present || test) window.__glint = { scene, session, room, profile, input, fx };
   requestAnimationFrame(frame);
   if (session.playing() || test) {
     audio.unlock();

@@ -59,9 +59,19 @@ export function makeInput(canvas, scene, api) {
     const a = normDeg(p.angle);
     const rad = (a * Math.PI) / 180;
     const { R } = dialSizes();
-    // The sell button sits at the ring's upper right on screen, whichever way the table is turned.
-    const sy = scene.view.rot ? R * 0.95 : -R * 0.95;
-    return { cx: c.x, cy: c.y, hx: c.x + Math.cos(rad) * R, hy: c.y + Math.sin(rad) * R, sx: c.x + R * 0.95, sy: c.y + sy, R };
+    // The sell button sits on a screen diagonal (upper right first), never where the handle is: the handle points
+    // wherever the glass does, and a press meant for it must not sell the piece.
+    const turn = scene.view.rot ? 90 : 0;
+    const handleOnScreen = normDeg(a - turn);
+    const turnable = oriented(p.type) || p.type === 'combiner' || p.type === 'crystal' || p.type === 'shutter';
+    let s = -45;
+    if (turnable) for (const cand of [-45, -135, 135, 45]) if (Math.abs(deltaDeg(handleOnScreen, cand)) >= 70) {
+      s = cand;
+      break;
+    }
+    const w = ((s + turn) * Math.PI) / 180;
+    const d = R * 1.34;
+    return { cx: c.x, cy: c.y, hx: c.x + Math.cos(rad) * R, hy: c.y + Math.sin(rad) * R, sx: c.x + Math.cos(w) * d, sy: c.y + Math.sin(w) * d, R };
   }
 
   function hitDial(w, p) {
@@ -428,6 +438,8 @@ export function makeInput(canvas, scene, api) {
   return {
     st,
     ghost,
+    /** The dial's handle and sell button for a piece (reference px), for the touch script. */
+    dial: (p) => dialGeometry(p),
     drawOverlay,
     selectTray,
     clearAll,

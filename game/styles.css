@@ -551,7 +551,7 @@ button:focus-visible {
   }
   .hud .abilities {
     top: auto;
-    bottom: calc(64px + var(--safe-bottom));
+    bottom: calc(112px + var(--safe-bottom));
     transform: none;
     width: 112px;
     flex-direction: row;
@@ -563,20 +563,21 @@ button:focus-visible {
     height: 46px;
     font-size: 14px;
   }
+  /* Undo above the wave button: one per row, each the column's width. */
   .hud .actions {
     width: 112px;
-    height: 46px;
+    flex-direction: column;
+    gap: 6px;
     bottom: calc(10px + var(--safe-bottom));
   }
-  .hud .wavebtn {
-    min-width: 0;
-    flex: 1;
-    padding: 0 6px;
-    font-size: 16px;
-  }
+  .hud .wavebtn,
   .hud .undo {
-    min-width: 44px;
-    padding: 0 8px;
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 6px;
+    font-size: 15px;
+    letter-spacing: 0.06em;
   }
   .hud .fore {
     bottom: auto;
