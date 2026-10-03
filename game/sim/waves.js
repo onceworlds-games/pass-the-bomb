@@ -13,7 +13,7 @@ export function waveCount(night) {
 }
 
 export function nightBudget(night, ascension = 0) {
-  return 110 * Math.pow(1.25, night - 1) * (1 + 0.08 * ascension);
+  return 110 * Math.pow(1.18, night - 1) * (1 + 0.08 * ascension);
 }
 
 export function waveDuration(night) {

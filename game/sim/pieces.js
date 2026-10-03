@@ -41,6 +41,7 @@ export function baseMods() {
     mirrorKeep: 0.93,
     splitterKeep: 0.95,
     prismWhite: 0, // Dichroic Glass: a fourth, white beam at this share of the input
+    prismGain: 1.1, // each colour leaves a prism with this share of its channel (white in)
     filterKeep: 0.9,
     focusMin: FOCUS_MIN,
     focusDist: FOCUS_DIST,

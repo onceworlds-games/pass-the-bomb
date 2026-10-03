@@ -27,7 +27,7 @@ export const HUES = ['r', 'g', 'b'];
 export const GLYPH = { r: 'triangle', g: 'square', b: 'circle', w: 'diamond' };
 export const MAX_SHADES = 160;
 
-export const K_DAMAGE = 0.14;
+export const K_DAMAGE = 0.2;
 export const W0 = 12;
 
 /** The colour multiplier of a beam (channel powers) against a Shade. */
@@ -160,9 +160,10 @@ export function stepShades(shades, board, dt, ctx) {
       dxs = tmpFlow.x;
       dys = tmpFlow.y;
       if (light && def.flee > 0) {
+        // Light pushes, gently: ink hesitates and bends around a pool rather than finding a way round every beam.
         const g = light.gradient(s.x, s.y);
-        dxs -= g.x * def.flee;
-        dys -= g.y * def.flee;
+        dxs -= g.x * def.flee * 0.35;
+        dys -= g.y * def.flee * 0.35;
       }
     }
     if (buckets) {

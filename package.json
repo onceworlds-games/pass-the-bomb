@@ -1,0 +1,15 @@
+{
+  "name": "glint",
+  "private": true,
+  "type": "module",
+  "description": "Bend light with mirrors, prisms and lenses to burn back the Shades.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test test/*.test.mjs",
+    "balance": "node scripts/balance.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "store": "node scripts/store.mjs",
+    "mp": "node scripts/mp.mjs"
+  }
+}

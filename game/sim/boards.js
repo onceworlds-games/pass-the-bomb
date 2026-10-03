@@ -67,7 +67,7 @@ const SPIRAL = [
   'o=o#=============#o=o',
   'o=o=ooooooooooooo=o=o',
   'o=o=ooooooooooooo=o=o',
-  'L=ooooooooooHoooo=ooo',
+  'L=ooooooooHoooooo=ooo',
   'o=o=ooooooooooooo=o=o',
   'o=o=ooooooooooooo=o=o',
   'o=o#=============#o=o',

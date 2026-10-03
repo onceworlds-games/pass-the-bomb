@@ -7,6 +7,8 @@ import { segmentWidthAt } from './trace.js';
 import { SHADES, K_DAMAGE, W0, colourMult, effectiveHue } from './shades.js';
 
 export const LCELL = 32;
+export const HALO = 26; // px beyond the core where a beam still scorches
+export const HALO_SHARE = 0.35; // the halo's damage at its inner edge
 
 export function makeLightMap(board) {
   const cols = Math.ceil(board.w / LCELL) + 4;
@@ -99,14 +101,17 @@ export function burnShades(segments, shades, dt, ctx) {
       const P = seg.r + seg.g + seg.b;
       if (!(P > 0)) continue;
       // Quick reject: a box around the segment grown by the widest it gets plus the Shade.
-      const grow = Math.max(seg.w0, seg.w1) * 0.5 + s.r;
+      const grow = Math.max(seg.w0, seg.w1) * 0.5 + s.r + HALO;
       if (s.x < Math.min(seg.x0, seg.x1) - grow || s.x > Math.max(seg.x0, seg.x1) + grow) continue;
       if (s.y < Math.min(seg.y0, seg.y1) - grow || s.y > Math.max(seg.y0, seg.y1) + grow) continue;
       const q = pointSegment(s.x, s.y, seg.x0, seg.y0, seg.x1, seg.y1);
       const w = segmentWidthAt(seg, q.u * seg.len);
-      if (q.d > w * 0.5 + s.r) continue;
-      const focused = w <= finite(mods.focusMin, 3) + 0.75;
-      let mult = colourMult(s, seg, mods) * (W0 / Math.max(1, w)) * (seg.tint || 1) * (focused ? finite(mods.lensBoost, 1) : 1);
+      const inner = w * 0.5 + s.r;
+      if (q.d > inner + HALO) continue;
+      // The core burns in full; the halo around it scorches, fading out over HALO px.
+      const halo = q.d > inner ? HALO_SHARE * (1 - (q.d - inner) / HALO) : 1;
+      const focused = w <= finite(mods.focusMin, 3) + 0.75 && halo === 1;
+      let mult = halo * colourMult(s, seg, mods) * (W0 / Math.max(1, w)) * (seg.tint || 1) * (focused ? finite(mods.lensBoost, 1) : 1);
       if (hitMul) mult *= hitMul(s, seg, q, w);
       if (!(mult > 0)) continue;
       const dps = K_DAMAGE * P * mult * dmgMul;

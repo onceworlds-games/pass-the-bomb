@@ -31,6 +31,17 @@ export function createNight(cfg) {
   const seed = finite(cfg.seed, hashString(String(cfg.seed ?? 'glint')));
   const rng = makeRng((hashString(`night:${seed}:${night}`) ^ 0x51ed) >>> 0);
   const plan = planNight({ seed, night, board, ascension: cfg.ascension || 0, tutorial: !!cfg.tutorial });
+  const flags = cfg.flags || {};
+  if (flags.hpNext) plan.hpMult *= 1.15;
+  if (flags.moths || flags.gloomNext) {
+    const extra = makeRng(hashString(`extra:${seed}:${night}`));
+    for (const w of plan.waves) {
+      if (flags.moths) w.entries.push({ t: extra.range(4, w.dur * 0.6), type: 'moth', hue: 'r', arc: extra.pick(w.arcs), n: extra.int(1, 2), gap: 2 });
+      if (flags.gloomNext) w.entries.push({ t: extra.range(6, w.dur * 0.6), type: 'gloom', hue: extra.pick(w.hues), arc: extra.pick(w.arcs), n: 1, gap: 1 });
+      w.entries.sort((a, b) => a.t - b.t);
+    }
+  }
+  const duskCap = clamp(finite(mods.duskCap, DUSK_CAP), 20, 600);
   const light = makeLightMap(board);
   const deck = {};
   for (const [type, n] of Object.entries(cfg.deck || {})) if (isPieceType(type)) deck[type] = num(n, 0, 99, 0);
@@ -287,6 +298,7 @@ export function createNight(cfg) {
     s.hx = -arc.ux;
     s.hy = -arc.uy;
     s.arc = e.arc;
+    if (mods.shadeSpeed) s.speedMult = clamp(finite(mods.shadeSpeed, 1), 0.5, 2);
     if (mods.rimBurn > 0 && !def.inside) s.rimBurn = mods.rimBurn;
     if (def.sits) s.phaseAt = S.t;
     S.shades.push(s);
@@ -574,6 +586,7 @@ export function createNight(cfg) {
       ev('hearthit', { id: h.shade.id, type: h.shade.type, dmg, hp: S.heart.hp, heart: h.heart });
       if (S.heart.hp <= 0 && S.phase !== 'lost') {
         S.phase = 'lost';
+        S.lostBy = h.shade.type;
         ev('lost', { by: h.shade.type, night, wave: S.wave, score: S.stats.score });
       }
     }
@@ -583,7 +596,7 @@ export function createNight(cfg) {
     for (const pl of Object.values(players)) pl.focus = Math.min(mods.focusMax, pl.focus + mods.focusRegen * TICK);
     // Phase bookkeeping.
     if (S.phase === 'dusk') {
-      if (S.t >= DUSK_CAP) startWave(0, '');
+      if (S.t >= duskCap) startWave(0, '');
     } else if (S.phase === 'wave') {
       S.waveT += TICK;
       while (S.pending.length && S.pending[0].t <= S.waveT) {

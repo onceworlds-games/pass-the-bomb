@@ -325,7 +325,7 @@ export function traceBeams({ board, pieces, lamps, t = 0, mods = baseMods(), zon
         l.heat += P * def.absorb;
         const side = ray.dx * target.seg.nx + ray.dy * target.seg.ny >= 0 ? 1 : -1;
         const present = (ray.r > 1.5) + (ray.g > 1.5) + (ray.b > 1.5);
-        const gain = present >= 2 ? def.gain : def.dullGain;
+        const gain = present >= 2 ? finite(mods.prismGain, def.gain) : def.dullGain;
         const w = widthAt(ray, since);
         for (const ch of ['r', 'g', 'b']) {
           const pw = ray[ch] * gain;
