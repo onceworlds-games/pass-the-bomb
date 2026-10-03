@@ -21,7 +21,7 @@ export function packSnapshot(N, seq) {
     lamps: S.lamps.map((L) => [Math.round(L.angle), Math.round(L.power)]),
     shades: N.exportShades(),
     heat: N.exportHeat(),
-    focus: Object.fromEntries(Object.values(S.players).map((pl) => [pl.id, [Math.round(pl.focus), Math.round(pl.flareAt * 10) / 10, Math.round(pl.surgeAt * 10) / 10]])),
+    focus: Object.fromEntries(Object.values(S.players).map((pl) => [pl.id, [Math.round(pl.focus), Math.round(pl.flareAt * 10) / 10, Math.round(pl.surgeAt * 10) / 10, N.canUndo(pl.id) ? 1 : 0]])),
     shadows: S.shadows.map((z) => [Math.round(z.x), Math.round(z.y), z.r]),
     bands: S.bands.map((b) => [Math.round(b.x0), Math.round(b.x1)]),
   };
@@ -57,6 +57,7 @@ export function applySnapshot(M, m) {
       pl.focus = clamp(finite(v[0], pl.focus), 0, 500);
       pl.flareAt = clamp(finite(v[1], 0), 0, 1e6);
       pl.surgeAt = clamp(finite(v[2], 0), 0, 1e6);
+      pl.undoFlag = v[3] === 1 ? 1 : 0;
     }
   }
   S.shadows = Array.isArray(m.shadows) ? m.shadows.slice(0, 12).filter(Array.isArray).map((z) => ({ x: finite(z[0]), y: finite(z[1]), r: clamp(finite(z[2], 80), 10, 300), until: Infinity })) : [];

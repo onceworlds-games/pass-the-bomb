@@ -17,6 +17,7 @@ export const HEAT_RATE = 0.5;
 export const COOL_RATE = 0.06;
 export const COSTS = { place: 10, move: 5, rotateStep: 1, sell: 0 };
 export const DAWN_MAX = 40;
+export const UNDO_WINDOW = 8; // seconds a night move can still be taken back (at dusk, always)
 export const PHASES = ['dusk', 'wave', 'break', 'done', 'lost'];
 
 const num = (v, lo, hi, fb = lo) => clamp(finite(v, fb), lo, hi);
@@ -101,19 +102,42 @@ export function createNight(cfg) {
   const player = (pid) => players[String(pid)];
   const free = () => S.phase === 'dusk';
 
+  /** Spends Focus for a change; returns false when there is not enough, else the Focus actually spent (>= 0). */
   function spend(pl, cost, what) {
+    pl.spent = 0;
     if (free() || cost <= 0) return true;
     if (mods.freeFirstPlacement && what === 'place' && !pl.freeUsed) {
       pl.freeUsed = true;
       return true;
     }
-    cost *= mods.focusCost;
+    // A Smith's hands are cheaper (a Smith kit and the role do not stack).
+    cost *= pl.role === 'smith' ? Math.min(mods.focusCost, 0.7) : mods.focusCost;
     if (pl.focus + 1e-6 < cost) {
       ev('refuse', { pid: pl.id, reason: 'focus', need: cost });
       return false;
     }
     pl.focus -= cost;
+    pl.spent = cost;
     return true;
+  }
+
+  /** Remembers a player's last change so Undo can take it back (a run of turns on one piece is one change). */
+  function remember(pl, entry) {
+    const prev = pl.last;
+    if (entry.op === 'rotate' && prev && prev.op === 'rotate' && prev.id === entry.id && S.t - prev.t < 3) {
+      prev.cost += entry.cost;
+      prev.t = S.t;
+      return;
+    }
+    pl.last = Object.assign(entry, { t: S.t });
+  }
+  const undoable = (pl) => !!(pl && pl.last && (S.phase === 'dusk' || S.t - pl.last.t <= UNDO_WINDOW) && S.phase !== 'done' && S.phase !== 'lost');
+
+  function removePiece(i) {
+    const p = S.pieces[i];
+    S.pieces.splice(i, 1);
+    for (const s of S.shades) if (s.state === 'chew' && s.target === p.id) s.state = 'walk';
+    return p;
   }
 
   function refuse(pid, reason, extra) {
@@ -137,6 +161,7 @@ export function createNight(cfg) {
       if (!spend(pl, COSTS.place, 'place')) return { ok: false, reason: 'focus' };
       const piece = { id: S.nextPieceId++, type, c, r, angle: oriented(type) ? snapDeg(cmd.angle, 5) : normDeg(cmd.angle), heat: 0, cracked: 0, hot: 0, owner: String(pid), t0: S.t, store: 0, sr: 0, sg: 0, sb: 0, pulseUntil: 0, pr: 0, pg: 0, pb: 0 };
       S.pieces.push(piece);
+      remember(pl, { op: 'place', id: piece.id, cost: pl.spent || 0 });
       ev('placed', { pid: String(pid), id: piece.id, type, c, r });
       return { ok: true, id: piece.id };
     },
@@ -151,6 +176,7 @@ export function createNight(cfg) {
       if (p.c === c && p.r === r) return { ok: true, id: p.id };
       if (pieceAt(c, r)) return refuse(pid, 'occupied', { c, r });
       if (!spend(pl, COSTS.move, 'move')) return { ok: false, reason: 'focus' };
+      remember(pl, { op: 'move', id: p.id, c: p.c, r: p.r, cost: pl.spent || 0 });
       p.c = c;
       p.r = r;
       p.t0 = S.t;
@@ -167,6 +193,7 @@ export function createNight(cfg) {
       const d = Math.abs(deltaDeg(p.angle, target));
       if (d < 0.01) return { ok: true, id: p.id };
       if (!spend(pl, (d / 15) * COSTS.rotateStep, 'rotate')) return { ok: false, reason: 'focus' };
+      remember(pl, { op: 'rotate', id: p.id, angle: p.angle, cost: pl.spent || 0 });
       p.angle = target;
       ev('rotated', { pid: String(pid), id: p.id, angle: target });
       return { ok: true, id: p.id };
@@ -176,11 +203,42 @@ export function createNight(cfg) {
       if (!pl) return refuse(pid, 'player');
       const i = S.pieces.findIndex((p) => p.id === finite(cmd.id, -1));
       if (i < 0) return refuse(pid, 'piece');
-      const p = S.pieces[i];
-      S.pieces.splice(i, 1);
-      if (!free() && mods.sellRefund > 0) pl.focus = Math.min(mods.focusMax, pl.focus + COSTS.place * mods.sellRefund);
-      for (const s of S.shades) if (s.state === 'chew' && s.target === p.id) s.state = 'walk';
+      const p = removePiece(i);
+      let refund = 0;
+      const share = Math.max(mods.sellRefund, pl.role === 'smith' ? 0.7 : 0);
+      if (!free() && share > 0) {
+        refund = Math.max(0, Math.min(mods.focusMax - pl.focus, COSTS.place * share));
+        pl.focus += refund;
+      }
+      remember(pl, { op: 'sell', id: p.id, type: p.type, c: p.c, r: p.r, angle: p.angle, cost: -refund });
       ev('sold', { pid: String(pid), id: p.id, type: p.type, c: p.c, r: p.r });
+      return { ok: true };
+    },
+    /** Takes back the player's last change (recent at night, any at dusk) and returns the Focus it cost. */
+    undo(pid) {
+      const pl = player(pid);
+      if (!pl) return refuse(pid, 'player');
+      if (!undoable(pl)) return refuse(pid, 'undo');
+      const L = pl.last;
+      pl.last = null;
+      const i = S.pieces.findIndex((p) => p.id === L.id);
+      if (L.op === 'place') {
+        if (i < 0) return refuse(pid, 'undo');
+        removePiece(i);
+      } else if (L.op === 'move') {
+        if (i < 0 || pieceAt(L.c, L.r)) return refuse(pid, 'undo');
+        S.pieces[i].c = L.c;
+        S.pieces[i].r = L.r;
+        S.pieces[i].t0 = S.t;
+      } else if (L.op === 'rotate') {
+        if (i < 0) return refuse(pid, 'undo');
+        S.pieces[i].angle = L.angle;
+      } else if (L.op === 'sell') {
+        if (pieceAt(L.c, L.r) || available(L.type) <= 0 || cellKind(board, L.c, L.r) !== OPEN) return refuse(pid, 'undo');
+        S.pieces.push({ id: S.nextPieceId++, type: L.type, c: L.c, r: L.r, angle: L.angle, heat: 0, cracked: 0, hot: 0, owner: String(pid), t0: S.t, store: 0, sr: 0, sg: 0, sb: 0, pulseUntil: 0, pr: 0, pg: 0, pb: 0 });
+      } else return refuse(pid, 'undo');
+      pl.focus = clamp(pl.focus + finite(L.cost, 0), 0, mods.focusMax);
+      ev('undone', { pid: String(pid), op: L.op, id: L.id });
       return { ok: true };
     },
     lamp(pid, cmd) {
@@ -812,6 +870,13 @@ export function createNight(cfg) {
       const e = S.events;
       S.events = [];
       return e;
+    },
+    /** Can this player take back their last change now? (A mirror reads the host's answer from the snapshot.) */
+    canUndo(pid) {
+      const pl = players[String(pid)];
+      if (!pl) return false;
+      if (pl.undoFlag !== undefined) return !!pl.undoFlag && S.phase !== 'done' && S.phase !== 'lost';
+      return undoable(pl);
     },
     /** Adds a player who arrived after the night began (admitted at the next dusk, or a bot). */
     addPlayer(id, role = '') {

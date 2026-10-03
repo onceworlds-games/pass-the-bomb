@@ -35,10 +35,11 @@ test('commands are validated: bad cells, unknown types, occupied cells, empty tr
   assert.ok(ev.some((e) => e.k === 'refuse' && e.reason === 'focus'));
   // A Smith pays 30% less.
   const sm = N.player('b');
-  sm.focus = 8;
+  sm.focus = 6.9;
   assert.equal(N.command('b', { op: 'place', type: 'mirror', c: 9, r: 5 }).ok, false);
-  sm.focus = 10;
+  sm.focus = 7;
   assert.equal(N.command('b', { op: 'place', type: 'mirror', c: 9, r: 5 }).ok, true);
+  assert.ok(Math.abs(sm.focus) < 1e-6);
 });
 
 test('rotation snaps to 5 degrees and costs one Focus per 15; fixed pieces refuse', () => {
