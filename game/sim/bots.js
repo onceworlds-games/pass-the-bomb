@@ -200,7 +200,7 @@ export function mirrorAngleFor(dx, dy, ox, oy) {
  * The move a player makes on purpose: put a mirror where a beam already is and turn it down a lane, or put one
  * on the beam in line with a lane cell so the next move can finish the chain.
  */
-export function routeMutation(N, L, rng, free, arcs) {
+export function routeMutation(N, L, rng, free, arcs, hues = []) {
   const lamps = N.S.lamps.map((Lp, i) => ({ x: Lp.x, y: Lp.y, angle: L.lamps[i] ?? Lp.angle, power: 100, radius: Lp.radius }));
   const trace = traceBeams({ board: N.board, pieces: L.pieces, lamps, t: N.S.t, mods: N.mods });
   const lit = new Map();
@@ -215,12 +215,25 @@ export function routeMutation(N, L, rng, free, arcs) {
     }
   }
   const mirrors = rng.shuffle(L.pieces.filter((p) => p.type === 'mirror' || p.type === 'rotor' || p.type === 'splitter'));
-  if (!mirrors.length || !lit.size) return false;
+  if (!lit.size) return false;
   const arcList = arcs.length ? arcs : N.board.arcs.map((_, i) => i);
   const lane = laneCells(N, rng.pick(arcList));
   if (lane.length < 3) return false;
   const occupied = (c, r, self) => L.pieces.some((q) => !self.includes(q) && q.c === c && q.r === r);
   const dir = { x: 0, y: 0 };
+  // Colour: drop a filter of a wanted hue onto a lit lane cell, so the lane's white light becomes the colour.
+  if (hues && hues.length && rng.chance(0.4)) {
+    const filters = L.pieces.filter((p) => p.type.startsWith('filter-') && hues.includes(p.type.slice(7)));
+    const litLane = lane.filter((cell) => lit.has(cell.r * 100 + cell.c) && !occupied(cell.c, cell.r, filters));
+    if (filters.length && litLane.length) {
+      const f = rng.pick(filters);
+      const cell = rng.pick(litLane);
+      f.c = cell.c;
+      f.r = cell.r;
+      return true;
+    }
+  }
+  if (!mirrors.length) return false;
   // Aim at a lane cell past the first third: the beam then runs down the lane toward the Heart.
   const T = lane[rng.int(Math.floor(lane.length / 3), lane.length - 2)];
   flowAt(N.board, (T.c + 0.5) * CELL, (T.r + 0.5) * CELL, dir);
@@ -283,11 +296,11 @@ export function routeMutation(N, L, rng, free, arcs) {
   return false;
 }
 
-function mutate(N, layout, rng, free, arcs = []) {
+function mutate(N, layout, rng, free, arcs = [], hues = []) {
   const L = { pieces: layout.pieces.map((p) => ({ ...p })), lamps: layout.lamps.slice() };
   const roll = rng.next();
   if (roll < 0.35 && L.pieces.length) {
-    if (routeMutation(N, L, rng, free, arcs)) return L;
+    if (routeMutation(N, L, rng, free, arcs, hues)) return L;
   }
   if (roll < 0.12 && L.lamps.length) {
     const i = rng.int(0, L.lamps.length - 1);
@@ -368,7 +381,7 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
     const cur = cloneLayout(N);
     const evalFn = (L) => evaluateLayout(N, L.pieces, L.lamps, wHues, w.arcs, { locked: wLocked, targets });
     const saved = iterations;
-    const { layout } = search(cur, evalFn, Math.round(saved * 0.45), w.arcs);
+    const { layout } = search(cur, evalFn, Math.round(saved * 0.45), w.arcs, wHues);
     for (let i = 0; i < layout.pieces.length; i++) {
       const a = cur.pieces[i];
       const b = layout.pieces[i];
@@ -386,12 +399,12 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
     }
   }
 
-  function search(start, evalFn, iters = iterations, useArcs = arcs) {
+  function search(start, evalFn, iters = iterations, useArcs = arcs, useHues = hues) {
     const free = freeCells(N, -1);
     let best = start;
     let bestScore = evalFn(best);
     for (let i = 0; i < iters; i++) {
-      const cand = mutate(N, best, rng, free, useArcs);
+      const cand = mutate(N, best, rng, free, useArcs, useHues);
       // Coordinate descent on the moved piece: the best of its angles, not a random one.
       const moved = cand.pieces.find((p, k) => oriented(p.type) && (p.c !== best.pieces[k].c || p.r !== best.pieces[k].r || p.angle !== best.pieces[k].angle));
       let s = evalFn(cand);
@@ -527,6 +540,7 @@ export function pickDraft(kind, options, rng, deck = {}) {
     if (o.kind === 'piece') {
       const have = deck[o.id] || 0;
       v = ((colour ? PIECE_PRIORITY : HILL_PRIORITY)[o.id] ?? 1) * (o.n || 1) + (colour && o.id === 'prism' && have === 0 ? 3 : 0);
+      if (colour && o.id.startsWith('filter-') && have === 0) v += 2.5;
       v /= o.id === 'mirror' ? 1 + 0.1 * have : 1 + 0.6 * have;
     }
     else if (o.kind === 'relic') v = colour ? 6 - RELIC_PRIORITY.indexOf(o.id) * 0.2 : 2.5;

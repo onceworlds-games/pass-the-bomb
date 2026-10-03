@@ -45,7 +45,8 @@ async function boot() {
 
   // Join first, before anything heavy, so a reload keeps its seat.
   const me = await platform.player();
-  const room = await platform.join({ private: true, maxPlayers: 4, minPlayers: 1, lobby: 'bar' });
+  const JOIN = { private: true, maxPlayers: 4, minPlayers: 1, lobby: 'bar' };
+  let room = await platform.join(JOIN);
   const profile = makeProfileStore(await loadProfile());
   const app = {
     screen: '',
@@ -64,10 +65,7 @@ async function boot() {
   };
   platform.controls.clear();
 
-  const session = createSession({
-    room,
-    me,
-    hooks: {
+  const hooks = {
       onEvent: (e, own) => onEvent(e, own),
       onNightStart: (N) => {
         app.nightKills = { r: 0, g: 0, b: 0 };
@@ -94,12 +92,12 @@ async function boot() {
       onClose: (reason) => {
         app.screen = 'closed';
         hud.hide();
-        screens.closed(reason, () => location.reload());
+        screens.closed(reason, () => rejoin());
         audio.stopAll();
       },
       onRefuse: (reason, op) => onRefuse(reason, op),
-    },
-  });
+  };
+  let session = createSession({ room, me, hooks });
   await session.loadSavedRun();
 
   const input = makeInput(canvas, scene, {
@@ -483,11 +481,28 @@ async function boot() {
     }
   }
   // On the platform the host presses Start in the strip: make sure a run exists the moment the match starts.
-  room.on('starting', () => {
-    if (!session.isHost()) return;
-    const R = session.currentRun();
-    if (!R || R.phase === 'lost' || R.phase === 'won') session.newRun({ ...app.setup, tutorial: !profile.p.tutorialDone });
-  });
+  function wireRoom() {
+    room.on('starting', () => {
+      if (!session.isHost()) return;
+      const R = session.currentRun();
+      if (!R || R.phase === 'lost' || R.phase === 'won') session.newRun({ ...app.setup, tutorial: !profile.p.tutorialDone });
+    });
+    room.on('state', (key) => {
+      if (key === 'setup' && !session.isHost() && app.screen === 'lobby') showLobby();
+    });
+  }
+  wireRoom();
+
+  /** The room closed (kicked, replaced, lost): one button, and the same join again. */
+  async function rejoin() {
+    app.screen = '';
+    room = await platform.join(JOIN);
+    session = createSession({ room, me, hooks });
+    wireRoom();
+    await session.loadSavedRun();
+    if (session.playing()) showPlay();
+    else showLobby();
+  }
 
   function showPlay() {
     screens.hide();
@@ -737,9 +752,6 @@ async function boot() {
     audio.pauseMusic(false);
   });
   platform.on('player', () => app.screen === 'lobby' && showLobby());
-  room.on('state', (key) => {
-    if (key === 'setup' && !session.isHost() && app.screen === 'lobby') showLobby();
-  });
 
   // ---- go -------------------------------------------------------------------------------------------------
   window.__glint = { scene, session, room, profile, input, fx }; // the smoke and store scripts read this

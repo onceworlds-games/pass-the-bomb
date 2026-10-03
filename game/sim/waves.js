@@ -13,7 +13,8 @@ export function waveCount(night) {
 }
 
 export function nightBudget(night, ascension = 0) {
-  return 100 * Math.pow(1.17, night - 1) * (1 + 0.08 * ascension);
+  // Steep through night 8, then gentler: the late nights thicken bodies and mix colours instead of piling on.
+  return 100 * Math.pow(1.17, Math.min(night, 8) - 1) * Math.pow(1.07, Math.max(0, night - 8)) * (1 + 0.08 * ascension);
 }
 
 export function waveDuration(night) {
