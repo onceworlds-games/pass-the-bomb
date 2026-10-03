@@ -6,6 +6,7 @@
 //   node scripts/balance.mjs --runs               full twelve-night runs per bot: the survival curve
 //   node scripts/balance.mjs --archetypes         four decks at night 8 (fence, furnace, prism fan, rotor sweep), 24 seeds
 //   node scripts/balance.mjs --relics             each relic's effect on the colour bot at night 8, 24 paired seeds
+//                                                  (--only night-eyes,anvil --from 25 to look closer at a few)
 //   node scripts/balance.mjs --heat               six beams on one mirror: time to crack; a Dawn's price
 //   node scripts/balance.mjs --all
 import { buildBoard } from '../game/sim/boards.js';
@@ -140,13 +141,14 @@ function relicsTable() {
   const n = SEEDS_WIDE;
   console.log(`\nRelics: colour bot at night 8, standard deck, each relic alone (${n} paired seeds: the same nights with and without it). Target: +15 / -10 at most.`);
   const base = [];
-  for (let s = 1; s <= n; s++) base.push(playNight(standardRun('colour', 8, s), 'colour', s).won ? 1 : 0);
+  for (let s = FROM; s < FROM + n; s++) base.push(playNight(standardRun('colour', 8, s), 'colour', s).won ? 1 : 0);
   const baseRate = (100 * base.reduce((a, b) => a + b, 0)) / n;
   console.log(`baseline ${baseRate.toFixed(0)}%`);
   const outliers = [];
-  for (const id of RELIC_IDS) {
+  const only = String(flag('only', '')).split(',').filter(Boolean);
+  for (const id of RELIC_IDS.filter((r) => !only.length || only.includes(r))) {
     const rows = [];
-    for (let s = 1; s <= n; s++) {
+    for (let s = FROM; s < FROM + n; s++) {
       const R = standardRun('colour', 8, s);
       if (!R.relics.includes(id)) R.relics.push(id);
       if (RELICS[id].heal) {

@@ -20,7 +20,8 @@ Play it at [onceworlds.com/play/glint](https://onceworlds.com/play/glint).
 - **Heat.** Every piece absorbs a little of what it handles. Stack six beams on one mirror and it cracks in
   seconds; leave it hot and it shatters. Heat-sinks cool their neighbours.
 - **Dawn.** The ledger, then one draft of three (glass, an upgrade or a relic), and sometimes a Fate: a bargain
-  with a price. Twelve nights to win; then the table stays open in Endless.
+  with a price. Watch again plays the night's last seconds at half speed. Twelve nights to win; then the table
+  stays open in Endless.
 
 ### Controls
 
