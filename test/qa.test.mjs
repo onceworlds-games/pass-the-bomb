@@ -68,9 +68,9 @@ test('Undo of a sale puts the glass back where it stood; a Smith gives the refun
 
 test('a Rotor rests at either end of its swing and passes between them', () => {
   const R = PIECES.rotor;
-  assert.equal(rotorOffset(0.1), -R.sweep);
-  assert.equal(rotorOffset(0.6), R.sweep);
-  const mid = rotorOffset(0.4);
+  assert.equal(rotorOffset(R.dwell / 2), -R.sweep);
+  assert.equal(rotorOffset(0.5 + R.dwell / 2), R.sweep);
+  const mid = rotorOffset(R.dwell + (0.5 - R.dwell) / 2);
   assert.ok(mid > -R.sweep && mid < R.sweep);
   const p = { type: 'rotor', angle: 90, t0: 0 };
   const angles = [];

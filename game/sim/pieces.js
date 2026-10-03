@@ -26,7 +26,7 @@ export const PIECES = {
   concave: { id: 'concave', name: 'Concave Lens', shape: 'segment', absorb: 0.04, tip: 'Spreads light wide. A fence.' },
   combiner: { id: 'combiner', name: 'Combiner', shape: 'disc', keep: 0.95, absorb: 0.05, tip: 'Merges beams. Fires forward.' },
   crystal: { id: 'crystal', name: 'Crystal', shape: 'disc', capacity: 240, pulse: 0.6, tip: 'Drinks light. Bursts forward.' },
-  rotor: { id: 'rotor', name: 'Rotor', shape: 'segment', keep: 0.93, absorb: 0.07, sweep: 22.5, period: 4, dwell: 0.3, tip: 'A mirror that swings: one beam, two lanes.' },
+  rotor: { id: 'rotor', name: 'Rotor', shape: 'segment', keep: 0.93, absorb: 0.07, sweep: 22.5, period: 5, dwell: 0.4, tip: 'A mirror that swings: one beam, two lanes.' },
   shutter: { id: 'shutter', name: 'Shutter', shape: 'disc', absorb: 0.02, tip: 'Open a second, shut a second.' },
   heatsink: { id: 'heatsink', name: 'Heat-sink', shape: 'none', cool: 2.5, tip: 'Cools its neighbours.' },
   black: { id: 'black', name: 'Black Glass', shape: 'disc', absorb: 0.1, tip: 'Eats light. A shield.' },

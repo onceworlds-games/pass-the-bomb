@@ -37,9 +37,12 @@ export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
   // Glass that moves (a Rotor's swing, a Shutter's blink) is judged across its cycle, not at one instant.
   if (!opts.at && pieces.some((p) => p.type === 'rotor' || p.type === 'shutter')) {
     const period = PIECES.rotor.period / Math.max(0.25, N.mods.rotorSpeed || 1);
+    const d = PIECES.rotor.dwell;
+    const sw = 0.5 - d;
     let sum = 0;
     let weight = 0;
-    for (const [u, w] of [[0.15, 0.3], [0.4, 0.2], [0.65, 0.3], [0.9, 0.2]]) {
+    // Each rest and the middle of each swing, weighted by how long the Rotor spends there.
+    for (const [u, w] of [[d / 2, d], [d + sw / 2, sw], [0.5 + d / 2, d], [0.5 + d + sw / 2, sw]]) {
       sum += w * evaluateLayout(N, pieces, lampAngles, hues, arcs, { ...opts, at: N.S.t + u * period });
       weight += w;
     }
