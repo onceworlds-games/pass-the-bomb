@@ -3,7 +3,6 @@
 import { platform } from './platform.js';
 import { makeScene } from './render/scene.js';
 import { makeFx } from './render/fx.js';
-import { PALETTE } from './render/felt.js';
 import { makeHud, makeHints } from './ui/hud.js';
 import { makeInput } from './ui/input.js';
 import { makeScreens } from './ui/screens.js';
@@ -12,9 +11,8 @@ import { loadProfile, makeProfileStore } from './profile.js';
 import { makeAudio } from './audio/audio.js';
 import { forecast, planNight } from './sim/waves.js';
 import { traceBeams, countColourCrossings } from './sim/trace.js';
-import { dailySetup, dailyDay, endlessNights, RUN_VERSION } from './sim/run.js';
+import { dailySetup, dailyDay, endlessNights } from './sim/run.js';
 import { SHADES } from './sim/shades.js';
-import { BOARD_DEFS } from './sim/boards.js';
 import { CELL } from './sim/boards.js';
 import { clamp } from './sim/geom.js';
 
@@ -98,7 +96,7 @@ async function boot() {
         screens.closed(reason, () => rejoin());
         audio.stopAll();
       },
-      onRefuse: (reason, op) => onRefuse(reason, op),
+      onRefuse: (reason) => onRefuse(reason),
   };
   let session = createSession({ room, me, hooks });
   await session.loadSavedRun();
@@ -162,11 +160,10 @@ async function boot() {
     else if (name === 'surge') session.command({ op: 'surge' });
   }
 
-  function onRefuse(reason, op) {
+  function onRefuse(reason) {
     const text = { focus: 'No Focus', occupied: 'Taken', cell: 'Not there', none: 'None left', locked: 'In another hand', cooldown: 'Not yet', charge: 'Dawn is not full', dusk: 'Not at dusk', full: 'The table is full' }[reason];
     if (text) toast(text);
     audio.play('refuse');
-    void op;
   }
 
   let toastTimer = 0;
@@ -190,7 +187,6 @@ async function boot() {
     switch (e.k) {
       case 'kill': {
         const def = SHADES[e.type];
-        const hue = { r: PALETTE.red, g: PALETTE.green, b: PALETTE.blue }[e.hue] || PALETTE.core;
         fx.burst(e.x, e.y, def?.boss ? 40 : 8, `rgba(255,220,150,0.9)`, def?.boss ? 220 : 90, { quality: app.quality });
         fx.ink(e.x, e.y, def?.boss ? 30 : 6, { quality: app.quality });
         audio.play('burn', { big: !!def?.boss, hue: e.hue });
@@ -213,7 +209,6 @@ async function boot() {
         if (e.type === 'umbra') badge('umbra-down');
         if (e.type === 'lenseater') badge('lens-eater-down');
         if (app.nightKills.r && app.nightKills.g && app.nightKills.b) badge('rainbow');
-        void hue;
         break;
       }
       case 'spawn':
@@ -304,7 +299,7 @@ async function boot() {
         fx.shake(8, 0.8);
         break;
       case 'refuse':
-        if (e.pid === me.id) onRefuse(e.reason, '');
+        if (e.pid === me.id) onRefuse(e.reason);
         break;
       case 'ping':
         audio.play('ping');
@@ -573,7 +568,7 @@ async function boot() {
       }
       if (N && !app.closed) {
         if (app.screen !== 'play') showPlay();
-        drawNight(N, dt, shake);
+        drawNight(N, shake);
         audio.tick(dt, nightAudio(N));
       } else {
         if (scene.board) {
@@ -583,6 +578,7 @@ async function boot() {
           scene.setBoard(board, profile.p.cosmetics);
         }
         audio.tick(dt, null);
+        if (test) driveLobby();
       }
     } catch (e) {
       // Nothing in the frame may stop the game; a bad frame is logged once per second at most.
@@ -593,7 +589,7 @@ async function boot() {
     }
   }
 
-  function drawNight(N, dt, shake) {
+  function drawNight(N, shake) {
     const S = N.S;
     const segments = session.segments();
     const sel = input.selected;
@@ -666,7 +662,6 @@ async function boot() {
     // Guided first night: one short line at the moment it matters.
     if (N.plan.tutorial && canAct()) tutorialHints(N);
     if (test) drive(N);
-    void dt;
   }
 
   function tutorialHints(N) {
@@ -701,6 +696,18 @@ async function boot() {
 
   // ---- a scripted drive for the headless smoke test (?test): plays the public paths on its own ---------------
   let driveT = 0;
+  function driveLobby() {
+    const R = session.currentRun();
+    if (!R || !session.isHost()) return;
+    if (R.phase === 'dawn') {
+      if (R.draft && R.draft.taken < 0) session.draft(0);
+      else if (R.fate && R.fate.taken < 0) session.fate(false);
+    } else if (R.phase === 'won') session.endless();
+    else if (R.phase === 'dusk' && !session.playing() && performance.now() - (app.driveAt || 0) > 1500) {
+      app.driveAt = performance.now();
+      startFromObservatory();
+    }
+  }
   function drive(N) {
     const S = N.S;
     driveT += 1 / 60;
@@ -785,6 +792,4 @@ async function boot() {
       room.hideLobby?.(true);
     } catch {}
   }
-  void RUN_VERSION;
-  void BOARD_DEFS;
 }
