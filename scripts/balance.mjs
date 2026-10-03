@@ -4,8 +4,8 @@
 //   node scripts/balance.mjs                      standard nights 1, 6, 8, 12 for every bot (8 seeds)
 //   node scripts/balance.mjs --seeds 4 --nights 1,6
 //   node scripts/balance.mjs --runs               full twelve-night runs per bot: the survival curve
-//   node scripts/balance.mjs --archetypes         four layouts at night 8 (fence, furnace, prism fan, rotor sweep)
-//   node scripts/balance.mjs --relics             each relic's effect on the colour bot at night 8
+//   node scripts/balance.mjs --archetypes         four decks at night 8 (fence, furnace, prism fan, rotor sweep), 24 seeds
+//   node scripts/balance.mjs --relics             each relic's effect on the colour bot at night 8, 24 paired seeds
 //   node scripts/balance.mjs --heat               six beams on one mirror: time to crack; a Dawn's price
 //   node scripts/balance.mjs --all
 import { buildBoard } from '../game/sim/boards.js';
@@ -20,6 +20,12 @@ import { baseMods } from '../game/sim/pieces.js';
 const args = process.argv.slice(2);
 const flag = (name, fallback) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
 const SEEDS = Number(flag('seeds', 8));
+// --from N starts the seeds at N (several processes can share one long table: --from 1, --from 25, ...).
+const FROM = Number(flag('from', 1));
+// Archetypes and relics need more seeds than the night table to say anything (one seed is 4 points at 24).
+const SEEDS_WIDE = Number(flag('seeds', 24));
+/** 90% interval half-width of a survival share, in points. */
+const ci = (p, n) => Math.round(164.5 * Math.sqrt(Math.max(p * (1 - p), 0.01) / Math.max(1, n)));
 const NIGHTS = String(flag('nights', '1,6,8,12')).split(',').map(Number);
 const BOTS = String(flag('bots', 'random,hill,colour')).split(',');
 const all = args.includes('--all');
@@ -68,7 +74,7 @@ function nightsTable() {
     for (const kind of BOTS) {
       const rows = [];
       const t0 = Date.now();
-      for (let s = 1; s <= SEEDS; s++) rows.push(playNight(standardRun(kind, night, s), kind, s));
+      for (let s = FROM; s < FROM + SEEDS; s++) rows.push(playNight(standardRun(kind, night, s), kind, s));
       const won = rows.filter((r) => r.won).length;
       console.log(`${String(night).padStart(5)}  ${kind.padEnd(8)} ${pct(won, rows.length).padStart(7)}  ${avg(rows.map((r) => r.heart)).toFixed(0).padStart(5)}  ${avg(rows.map((r) => r.kills)).toFixed(0).padStart(5)}  ${avg(rows.map((r) => r.heat)).toFixed(0).padStart(5)}  ${avg(rows.map((r) => r.cracks)).toFixed(1).padStart(6)}  ${avg(rows.map((r) => r.dawns)).toFixed(1).padStart(5)}  ${((Date.now() - t0) / rows.length / 1000).toFixed(1).padStart(7)}`);
     }
@@ -100,48 +106,67 @@ function runsTable() {
   }
 }
 
+// Each archetype is the Observer kit plus six pieces of its own (the same count of glass for every one), played by
+// the colour bot: a fence of spread light, a furnace of lenses, a prism fan with filters, a swing of Rotors.
 const ARCHETYPES = {
-  fence: { mirror: 8, splitter: 3, concave: 1 },
-  furnace: { mirror: 4, lens: 3, splitter: 1 },
-  'prism fan': { mirror: 3, prism: 2, 'filter-r': 1, 'filter-g': 1, 'filter-b': 1, lens: 1 },
-  'rotor sweep': { rotor: 3, mirror: 4, lens: 1, splitter: 1 },
+  fence: { concave: 2, splitter: 2, mirror: 2 },
+  furnace: { lens: 2, mirror: 2, heatsink: 1, splitter: 1 },
+  'prism fan': { prism: 1, 'filter-r': 1, 'filter-g': 1, 'filter-b': 1, mirror: 2 },
+  'rotor sweep': { rotor: 3, mirror: 2, splitter: 1 },
 };
+const KIT = { mirror: 4, splitter: 1, prism: 1, lens: 1 };
 
 function archetypesTable() {
-  console.log(`\nArchetypes at night 8 (hill bot, ${SEEDS} seeds). Target: each within 15 points of the others.`);
-  for (const [name, deck] of Object.entries(ARCHETYPES)) {
+  const kind = String(flag('bot', 'colour'));
+  console.log(`\nArchetypes at night 8 (${kind} bot, ${SEEDS_WIDE} seeds, Observer kit + six pieces each). Target: within 15 points of each other.`);
+  const rates = [];
+  for (const [name, extra] of Object.entries(ARCHETYPES)) {
     const rows = [];
-    for (let s = 1; s <= SEEDS; s++) {
+    for (let s = 1; s <= SEEDS_WIDE; s++) {
       const R = createRun({ seed: s * 31, kit: 'observer', boardId: board.id, now: 0 });
       R.night = 8;
-      R.deck = { ...deck };
-      rows.push(playNight(R, 'hill', s));
+      R.deck = { ...KIT };
+      for (const [t, n] of Object.entries(extra)) R.deck[t] = (R.deck[t] || 0) + n;
+      rows.push(playNight(R, kind, s));
     }
-    console.log(`${name.padEnd(12)} survive ${pct(rows.filter((r) => r.won).length, rows.length).padStart(5)}  heart ${avg(rows.map((r) => r.heart)).toFixed(0).padStart(3)}  heat ${avg(rows.map((r) => r.heat)).toFixed(0)}%  cracks ${avg(rows.map((r) => r.cracks)).toFixed(1)}`);
+    const p = rows.filter((r) => r.won).length / rows.length;
+    rates.push(p);
+    console.log(`${name.padEnd(12)} survive ${pct(p * rows.length, rows.length).padStart(4)} ±${String(ci(p, rows.length)).padStart(2)}  heart ${avg(rows.map((r) => r.heart)).toFixed(0).padStart(3)}  kills ${avg(rows.map((r) => r.kills)).toFixed(0).padStart(2)}  heat ${avg(rows.map((r) => r.heat)).toFixed(0)}%  cracks ${avg(rows.map((r) => r.cracks)).toFixed(1)}`);
   }
+  console.log(`spread ${Math.round(100 * (Math.max(...rates) - Math.min(...rates)))} points`);
 }
 
 function relicsTable() {
-  console.log(`\nRelics: colour bot at night 8, standard deck, each relic alone (${SEEDS} seeds). Target: no relic moves survival more than +15 or -10 points.`);
+  const n = SEEDS_WIDE;
+  console.log(`\nRelics: colour bot at night 8, standard deck, each relic alone (${n} paired seeds: the same nights with and without it). Target: +15 / -10 at most.`);
   const base = [];
-  for (let s = 1; s <= SEEDS; s++) base.push(playNight(standardRun('colour', 8, s), 'colour', s).won);
-  const baseRate = (100 * base.filter(Boolean).length) / SEEDS;
+  for (let s = 1; s <= n; s++) base.push(playNight(standardRun('colour', 8, s), 'colour', s).won ? 1 : 0);
+  const baseRate = (100 * base.reduce((a, b) => a + b, 0)) / n;
   console.log(`baseline ${baseRate.toFixed(0)}%`);
+  const outliers = [];
   for (const id of RELIC_IDS) {
     const rows = [];
-    for (let s = 1; s <= SEEDS; s++) {
+    for (let s = 1; s <= n; s++) {
       const R = standardRun('colour', 8, s);
       if (!R.relics.includes(id)) R.relics.push(id);
       if (RELICS[id].heal) {
         R.heart.max += RELICS[id].heal;
         R.heart.hp = R.heart.max;
       }
-      rows.push(playNight(R, 'colour', s).won);
+      rows.push(playNight(R, 'colour', s).won ? 1 : 0);
     }
-    const rate = (100 * rows.filter(Boolean).length) / SEEDS;
+    const rate = (100 * rows.reduce((a, b) => a + b, 0)) / n;
     const d = rate - baseRate;
-    console.log(`${id.padEnd(18)} ${rate.toFixed(0).padStart(4)}%  ${(d >= 0 ? '+' : '') + d.toFixed(0)}`);
+    // Paired difference: its standard error comes from the seeds whose outcome the relic changed.
+    const diffs = rows.map((v, i) => v - base[i]);
+    const md = diffs.reduce((a, b) => a + b, 0) / n;
+    const se = 100 * Math.sqrt(diffs.reduce((a, b) => a + (b - md) ** 2, 0) / Math.max(1, n - 1) / n);
+    const mark = (d > 15 || d < -10) && Math.abs(d) > 1.65 * se ? '  OUTLIER' : '';
+    if (mark) outliers.push(id);
+    const info = id === 'second-sight' ? '  (information: the bot re-plans at every break anyway)' : '';
+    console.log(`${id.padEnd(18)} ${rate.toFixed(0).padStart(4)}%  ${((d >= 0 ? '+' : '') + d.toFixed(0)).padStart(4)}  ±${(1.65 * se).toFixed(0).padStart(2)}${mark}${info}`);
   }
+  console.log(outliers.length ? `outliers: ${outliers.join(', ')}` : 'no outliers beyond the band and the noise');
 }
 
 function heatCheck() {

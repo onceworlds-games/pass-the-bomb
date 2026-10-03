@@ -124,11 +124,10 @@ export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
   return score;
 }
 
-/** Points along the current beams: where a piece can be placed to change the light. `lit` collects the pieces light reaches. */
-function beamCells(N, layout, free, lit = null) {
+/** Points along the current beams: where a piece can be placed to change the light. */
+function beamCells(N, layout, free) {
   const lamps = N.S.lamps.map((L, i) => ({ x: L.x, y: L.y, angle: layout.lamps[i] ?? L.angle, power: 100, radius: L.radius }));
   const trace = traceBeams({ board: N.board, pieces: layout.pieces, lamps, t: N.S.t, mods: N.mods });
-  if (lit) for (const id of trace.load.keys()) lit.add(id);
   const cells = [];
   const seen = new Set();
   for (const seg of trace.segments) {
@@ -324,11 +323,10 @@ function mutate(N, layout, rng, free, arcs = [], hues = []) {
     const i = rng.int(0, L.lamps.length - 1);
     L.lamps[i] = snapDeg(L.lamps[i] + rng.pick([-30, -15, 15, 30]), 15);
   } else if (roll < 0.45 && L.pieces.length) {
-    // Snap a piece onto a beam: the only way to discover reflections quickly. Glass the light misses goes first.
-    const lit = new Set();
-    const cells = beamCells(N, L, free, lit);
-    const dark = L.pieces.filter((q) => !lit.has(q.id));
-    const p = dark.length && rng.chance(0.7) ? rng.pick(dark) : rng.pick(L.pieces);
+    // Snap a piece onto a beam: the only way to discover reflections quickly. (Preferring glass the light misses was
+    // tried and lost a third of the colour bot's nights: it crowds the lanes the beams already run down.)
+    const cells = beamCells(N, L, free);
+    const p = rng.pick(L.pieces);
     const spot = cells.length ? rng.pick(cells) : null;
     if (spot && !L.pieces.some((q) => q.c === spot.c && q.r === spot.r)) {
       p.c = spot.c;
