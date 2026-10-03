@@ -2,6 +2,7 @@
 
 import { CELL, WALL, ROPE, VOID, cellKind, flowAt } from './boards.js';
 import { clamp, finite, lerp } from './geom.js';
+import { WIDE_HOLD } from './pieces.js';
 
 // cls: 'plain' burns under any light; 'tinted' prefers its hue; 'locked' barely burns under anything else.
 export const SHADES = {
@@ -185,7 +186,11 @@ export function stepShades(shades, board, dt, ctx) {
     dxs /= l;
     dys /= l;
     let speed = def.speed * finite(s.speedMult, 1);
-    if (!def.hardened && !s.hardened) speed *= 1 - slowShare * clamp(lit / 0.6, 0, 1);
+    if (!def.hardened && !s.hardened) {
+      speed *= 1 - slowShare * clamp(lit / 0.6, 0, 1);
+      // Spread light is a fence: ink wades through it.
+      if (light && light.holdAt) speed *= 1 - WIDE_HOLD * light.holdAt(s.x, s.y);
+    }
     if (s.scared > 0) {
       s.scared -= dt;
       speed *= 0.35;

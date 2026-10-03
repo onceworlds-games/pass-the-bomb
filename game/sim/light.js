@@ -10,16 +10,29 @@ export const LCELL = 32;
 export const HALO = 26; // px beyond the core where a beam still scorches
 export const HALO_SHARE = 0.35; // the halo's damage at its inner edge
 
+/** How strongly a spread (concave) beam of power P holds ink, 0..1. */
+export const holdOf = (P) => clamp(finite(P) / 60, 0, 1);
+
 export function makeLightMap(board) {
   const cols = Math.ceil(board.w / LCELL) + 4;
   const rows = Math.ceil(board.h / LCELL) + 4;
   const data = new Float32Array(cols * rows);
+  const hold = new Float32Array(cols * rows);
   const map = {
     cols,
     rows,
     data,
+    hold,
     clear() {
       data.fill(0);
+      hold.fill(0);
+    },
+    /** How much a spread beam holds ink at a point (0..1): the fence a concave lens makes. */
+    holdAt(x, y) {
+      const c = Math.floor(finite(x) / LCELL) + 2;
+      const r = Math.floor(finite(y) / LCELL) + 2;
+      if (c < 0 || r < 0 || c >= cols || r >= rows) return 0;
+      return hold[r * cols + c];
     },
     /** Brightness at a point (about 1 under a fresh 100-power beam), bilinear. */
     sample(x, y) {
@@ -46,14 +59,39 @@ export function makeLightMap(board) {
     /** Rebuilds the map from traced segments. */
     build(segments) {
       data.fill(0);
+      hold.fill(0);
       const step = LCELL * 0.5;
       for (const seg of segments) {
         const P = seg.r + seg.g + seg.b;
         if (!(P > 0) || !(seg.len > 0)) continue;
         const n = Math.max(1, Math.ceil(seg.len / step));
+        const h = seg.spread > 0 ? holdOf(P) : 0;
         for (let i = 0; i <= n; i++) {
           const d = (seg.len * i) / n;
           const w = segmentWidthAt(seg, d);
+          if (h > 0) {
+            // The spread beam's whole width (and a little past its edge) wades.
+            const px = seg.x0 + seg.dx * d;
+            const py = seg.y0 + seg.dy * d;
+            const reach = w / 2 + 10;
+            const k = Math.ceil(reach / LCELL);
+            const hc = Math.floor(px / LCELL) + 2;
+            const hr = Math.floor(py / LCELL) + 2;
+            for (let dr = -k; dr <= k; dr++) {
+              for (let dc = -k; dc <= k; dc++) {
+                const cc = hc + dc;
+                const rr = hr + dr;
+                if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+                const cx = (cc - 2 + 0.5) * LCELL;
+                const cy = (rr - 2 + 0.5) * LCELL;
+                // Distance from the cell centre to the beam's line.
+                const off = Math.abs((cx - seg.x0) * seg.dy - (cy - seg.y0) * seg.dx);
+                if (off > reach + LCELL * 0.35) continue;
+                const idx = rr * cols + cc;
+                if (hold[idx] < h) hold[idx] = h;
+              }
+            }
+          }
           // A 100-power beam lights its cells to about 1; a wide beam lights a wider, slightly larger pool.
           const base = (P / 100) * (step / LCELL) * (i === 0 || i === n ? 0.5 : 1);
           const radius = Math.max(0, Math.round(w / 2 / LCELL));

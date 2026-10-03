@@ -13,6 +13,7 @@ export const FOCUS_DIST = 180; // px from a convex lens to its focus
 export const FOCUS_MIN = 3; // narrowest width at a focus
 export const SPREAD = 0.12; // concave lens: px of width per px travelled
 export const HEAT_CAP = 100;
+export const WIDE_HOLD = 0.6; // share of speed ink loses wading through light a concave lens has spread (a fence)
 
 export const PIECES = {
   mirror: { id: 'mirror', name: 'Mirror', shape: 'segment', keep: 0.93, absorb: 0.07, tip: 'Bounces light. Both faces.' },
@@ -25,7 +26,7 @@ export const PIECES = {
   concave: { id: 'concave', name: 'Concave Lens', shape: 'segment', absorb: 0.04, tip: 'Spreads light wide. A fence.' },
   combiner: { id: 'combiner', name: 'Combiner', shape: 'disc', keep: 0.95, absorb: 0.05, tip: 'Merges beams. Fires forward.' },
   crystal: { id: 'crystal', name: 'Crystal', shape: 'disc', capacity: 240, pulse: 0.6, tip: 'Drinks light. Bursts forward.' },
-  rotor: { id: 'rotor', name: 'Rotor', shape: 'segment', keep: 0.93, absorb: 0.07, spin: 30, tip: 'A mirror that sweeps.' },
+  rotor: { id: 'rotor', name: 'Rotor', shape: 'segment', keep: 0.93, absorb: 0.07, sweep: 22.5, period: 4, dwell: 0.3, tip: 'A mirror that swings: one beam, two lanes.' },
   shutter: { id: 'shutter', name: 'Shutter', shape: 'disc', absorb: 0.02, tip: 'Open a second, shut a second.' },
   heatsink: { id: 'heatsink', name: 'Heat-sink', shape: 'none', cool: 2.5, tip: 'Cools its neighbours.' },
   black: { id: 'black', name: 'Black Glass', shape: 'disc', absorb: 0.1, tip: 'Eats light. A shield.' },

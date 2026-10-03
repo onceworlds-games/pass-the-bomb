@@ -7,7 +7,8 @@ import { colourMult, SHADES, W0, K_DAMAGE } from './shades.js';
 import { oriented, PIECES } from './pieces.js';
 import { pointSegment, snapDeg, normDeg } from './geom.js';
 import { HEAT_RATE, COOL_RATE } from './night.js';
-import { HALO, HALO_SHARE } from './light.js';
+import { HALO, HALO_SHARE, holdOf } from './light.js';
+import { WIDE_HOLD } from './pieces.js';
 import { forecast } from './waves.js';
 
 const PIECE_PRIORITY = { prism: 5, lens: 4, 'filter-r': 3.5, 'filter-g': 3.5, 'filter-b': 3.5, mirror: 3, splitter: 2.5, combiner: 2, rotor: 2, concave: 1, heatsink: 1, crystal: 2, shutter: 0, black: 0 };
@@ -33,10 +34,21 @@ function freeCells(N, except) {
  * the forecast, minus a penalty for glass that would run hot. Higher is better. Pure and fast (one trace).
  */
 export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
+  // Glass that moves (a Rotor's swing, a Shutter's blink) is judged across its cycle, not at one instant.
+  if (!opts.at && pieces.some((p) => p.type === 'rotor' || p.type === 'shutter')) {
+    const period = PIECES.rotor.period / Math.max(0.25, N.mods.rotorSpeed || 1);
+    let sum = 0;
+    let weight = 0;
+    for (const [u, w] of [[0.15, 0.3], [0.4, 0.2], [0.65, 0.3], [0.9, 0.2]]) {
+      sum += w * evaluateLayout(N, pieces, lampAngles, hues, arcs, { ...opts, at: N.S.t + u * period });
+      weight += w;
+    }
+    return sum / weight;
+  }
   const board = N.board;
   const mods = N.mods;
   const lamps = N.S.lamps.map((L, i) => ({ x: L.x, y: L.y, angle: lampAngles[i] ?? L.angle, power: L.base * mods.lampPower, radius: L.radius }));
-  const trace = traceBeams({ board, pieces, lamps, t: N.S.t, mods });
+  const trace = traceBeams({ board, pieces, lamps, t: opts.at ?? N.S.t, mods });
   const segs = trace.segments;
   const probes = [];
   // A probe is a Shade walking in from an arc: a Creeper of each expected hue (and a Veil when Veils are due).
@@ -60,6 +72,7 @@ export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
         if (near) break;
         let dps = 0;
         let lit = 0;
+        let hold = 0;
         for (const seg of segs) {
           const P = seg.r + seg.g + seg.b;
           const q = pointSegment(x, y, seg.x0, seg.y0, seg.x1, seg.y1);
@@ -69,8 +82,9 @@ export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
           const halo = q.d > inner ? HALO_SHARE * (1 - (q.d - inner) / HALO) : 1;
           dps += halo * K_DAMAGE * P * colourMult(pr, seg, mods) * (W0 / Math.max(1, w));
           if (halo === 1) lit += P / 100;
+          if (seg.spread > 0 && q.d <= w * 0.5 + 10) hold = Math.max(hold, holdOf(P));
         }
-        const speed = pr.speed * (1 - mods.lightSlow * Math.min(1, lit / 0.6));
+        const speed = pr.speed * (1 - mods.lightSlow * Math.min(1, lit / 0.6)) * (1 - WIDE_HOLD * hold);
         burned += (dps * STEP) / Math.max(8, speed);
         flowAt(board, x, y, dir);
         x += dir.x * STEP;
@@ -107,10 +121,11 @@ export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
   return score;
 }
 
-/** Points along the current beams: where a piece can be placed to change the light. */
-function beamCells(N, layout, free) {
+/** Points along the current beams: where a piece can be placed to change the light. `lit` collects the pieces light reaches. */
+function beamCells(N, layout, free, lit = null) {
   const lamps = N.S.lamps.map((L, i) => ({ x: L.x, y: L.y, angle: layout.lamps[i] ?? L.angle, power: 100, radius: L.radius }));
   const trace = traceBeams({ board: N.board, pieces: layout.pieces, lamps, t: N.S.t, mods: N.mods });
+  if (lit) for (const id of trace.load.keys()) lit.add(id);
   const cells = [];
   const seen = new Set();
   for (const seg of trace.segments) {
@@ -306,9 +321,11 @@ function mutate(N, layout, rng, free, arcs = [], hues = []) {
     const i = rng.int(0, L.lamps.length - 1);
     L.lamps[i] = snapDeg(L.lamps[i] + rng.pick([-30, -15, 15, 30]), 15);
   } else if (roll < 0.45 && L.pieces.length) {
-    // Snap a piece onto a beam: the only way to discover reflections quickly.
-    const cells = beamCells(N, L, free);
-    const p = rng.pick(L.pieces);
+    // Snap a piece onto a beam: the only way to discover reflections quickly. Glass the light misses goes first.
+    const lit = new Set();
+    const cells = beamCells(N, L, free, lit);
+    const dark = L.pieces.filter((q) => !lit.has(q.id));
+    const p = dark.length && rng.chance(0.7) ? rng.pick(dark) : rng.pick(L.pieces);
     const spot = cells.length ? rng.pick(cells) : null;
     if (spot && !L.pieces.some((q) => q.c === spot.c && q.r === spot.r)) {
       p.c = spot.c;
@@ -362,7 +379,9 @@ function randomLayout(N, rng) {
 export function makeBot(kind, N, pid, rng, opts = {}) {
   const iterations = opts.iterations ?? (kind === 'colour' ? 240 : 100);
   const colour = kind === 'colour';
-  const fc = forecast(N.plan, colour && N.mods.forecastAll);
+  // The dusk plan is for the first wave: the bot re-plans at every break, so reading further (Second Sight) would
+  // only spread one layout over lanes that are not walked yet.
+  const fc = forecast(N.plan, false);
   const hues = colour ? fc.hues : [];
   const arcs = kind === 'random' ? [] : fc.arcs;
   const locked = colour && fc.types.includes('veil');

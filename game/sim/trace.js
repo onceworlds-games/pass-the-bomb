@@ -8,9 +8,29 @@ import { DEG, clamp, raySegment, rayCircle, rayBox, reflect, rotate, finite, nor
 
 const NUDGE = 0.05;
 
-/** The angle a piece presents at time t (rotors spin; everything else holds its angle). */
+/**
+ * Where a Rotor's plate stands, as an offset from its set angle, `u` cycles into its swing: it rests at one end, swings
+ * across, rests at the other and swings back (eased), so its beam serves two directions a quarter turn apart.
+ */
+export function rotorOffset(u) {
+  const R = PIECES.rotor;
+  const d = R.dwell;
+  const k = ((u % 1) + 1) % 1;
+  const ease = (x) => x * x * (3 - 2 * x);
+  let s;
+  if (k < d) s = -1;
+  else if (k < 0.5) s = -1 + 2 * ease((k - d) / (0.5 - d));
+  else if (k < 0.5 + d) s = 1;
+  else s = 1 - 2 * ease((k - 0.5 - d) / (0.5 - d));
+  return s * R.sweep;
+}
+
+/** The angle a piece presents at time t (rotors swing about their set angle; everything else holds its angle). */
 export function pieceAngle(piece, t, mods) {
-  if (piece.type === 'rotor') return normDeg(finite(piece.angle) + PIECES.rotor.spin * (mods?.rotorSpeed ?? 1) * (finite(t) - finite(piece.t0)));
+  if (piece.type === 'rotor') {
+    const period = PIECES.rotor.period / clamp(finite(mods?.rotorSpeed, 1), 0.25, 4);
+    return normDeg(finite(piece.angle) + rotorOffset((finite(t) - finite(piece.t0)) / period));
+  }
   return normDeg(piece.angle);
 }
 
