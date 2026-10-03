@@ -215,7 +215,7 @@ export function makeScene(canvas) {
     shades.draw(ctx, S.shades || [], t, view, { pixelRatio: pr, quality, rot: view.rot });
     for (const u of groupUpcoming(S.upcoming || [])) shades.drawTelegraph(ctx, board.arcs[u.arc], u.list, t, view.rot);
     // Effects.
-    if (fx) fx.draw(ctx, { quality });
+    if (fx) fx.draw(ctx, { quality, k: clamp(0.62 / Math.max(0.2, view.scale), 1, 2.6), upright });
     // Other Opticians' cursors.
     for (const c of S.cursors || []) {
       ctx.save();

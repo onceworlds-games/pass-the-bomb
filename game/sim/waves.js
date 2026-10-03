@@ -133,12 +133,17 @@ export function planNight({ seed, night, board, ascension = 0, tutorial = false 
   return { night, waves, boss: boss ? boss.type : null, hpMult };
 }
 
-/** Night 1 of a first run: it teaches. Light burns; the dark comes from more than one side; thick ink is slow. */
+/**
+ * Night 1 of a first run: it teaches, one idea a wave. First the ink walks in along the Lamp's own beam (the west
+ * lane) and burns with nothing placed: light on a lane burns. Then it comes from the north and the south, where
+ * glass must bend the light. Then thick red Creepers from the east and north: colour, and Focus at night.
+ */
 function tutorialNight(board, hpMult) {
   const arcIndex = (id, fallback) => {
     const i = board.arcs.findIndex((a) => a.id === id);
     return i >= 0 ? i : fallback;
   };
+  const W = arcIndex('W', 0);
   const E = arcIndex('E', 0);
   const N = arcIndex('N', 1 % board.arcs.length);
   const S = arcIndex('S', 2 % board.arcs.length);
@@ -148,9 +153,9 @@ function tutorialNight(board, hpMult) {
     boss: null,
     tutorial: true,
     waves: [
-      { i: 0, dur: 30, hues: ['r'], arcs: [E], budget: 24, entries: [{ t: 2, type: 'wisp', hue: 'r', arc: E, n: 4, gap: 1.6 }] },
-      { i: 1, dur: 36, hues: ['r'], arcs: [N, S], budget: 36, entries: [{ t: 2, type: 'wisp', hue: 'r', arc: N, n: 3, gap: 1.4 }, { t: 9, type: 'wisp', hue: 'r', arc: S, n: 3, gap: 1.4 }] },
-      { i: 2, dur: 40, hues: ['r'], arcs: [E, N], budget: 50, entries: [{ t: 2, type: 'creeper', hue: 'r', arc: E, n: 2, gap: 2 }, { t: 8, type: 'wisp', hue: 'r', arc: N, n: 4, gap: 1.2 }, { t: 18, type: 'creeper', hue: 'r', arc: N, n: 1, gap: 1 }] },
+      { i: 0, dur: 30, hues: ['r'], arcs: [W], budget: 24, entries: [{ t: 2, type: 'wisp', hue: 'r', arc: W, n: 4, gap: 1.8 }] },
+      { i: 1, dur: 36, hues: ['r'], arcs: [N, S], budget: 36, entries: [{ t: 3, type: 'wisp', hue: 'r', arc: N, n: 3, gap: 1.6 }, { t: 11, type: 'wisp', hue: 'r', arc: S, n: 3, gap: 1.6 }] },
+      { i: 2, dur: 40, hues: ['r'], arcs: [E, N], budget: 50, entries: [{ t: 2, type: 'creeper', hue: 'r', arc: E, n: 2, gap: 2.5 }, { t: 9, type: 'wisp', hue: 'r', arc: N, n: 4, gap: 1.2 }, { t: 18, type: 'creeper', hue: 'r', arc: N, n: 1, gap: 1 }] },
     ],
   };
 }

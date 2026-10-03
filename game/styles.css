@@ -1461,11 +1461,12 @@ button:focus-visible {
   color: #8a2a20;
 }
 /* Watching a night that began without you: one small plate, nothing over the table. */
+/* (The platform says "Watching" at the top centre; the table's own note sits at the foot of the screen.) */
 .screen.watching {
   background: none;
   pointer-events: none;
-  align-items: flex-start;
-  padding-top: calc(62px + var(--safe-top));
+  align-items: flex-end;
+  padding-bottom: calc(16px + var(--safe-bottom));
 }
 .watch-note {
   padding: 8px 18px;

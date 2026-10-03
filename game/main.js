@@ -18,6 +18,7 @@ import { CELL } from './sim/boards.js';
 import { clamp } from './sim/geom.js';
 
 const params = new URLSearchParams(location.search);
+const KILL_HUE = { r: 'rgba(255,120,100,0.95)', g: 'rgba(140,255,170,0.95)', b: 'rgba(130,200,255,0.95)' };
 if (params.has('poster')) {
   import('./poster.js').then((m) => m.runPoster(params.get('poster'))).catch((e) => console.error(e));
 } else boot().catch((e) => console.error('[glint] boot', e));
@@ -64,6 +65,7 @@ async function boot() {
     crossAt: 0,
     freeze: 0,
     lastHintAt: 0,
+    hintsShown: new Set(),
     frameNo: 0,
     backdropDt: 0,
   };
@@ -74,11 +76,11 @@ async function boot() {
       onNightStart: (N) => {
         app.nightKills = { r: 0, g: 0, b: 0 };
         app.cracked = false;
+        app.hintsShown = new Set();
         scene.setBoard(N.board, profile.p.cosmetics);
         input.deselect();
         audio.nightStart();
         showPlay();
-        if (N.plan.tutorial) hints.show('Night 1. One lamp. Make it reach.', 3200);
       },
       onNightEnd: () => {},
       onLobby: () => showLobby(),
@@ -187,11 +189,14 @@ async function boot() {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => (toastNode.hidden = true), ms);
   }
-  function hint(id, text, times = 3) {
-    if (performance.now() - app.lastHintAt < 1500) return;
+  /** One short line at the moment it matters: at most once a night, and only the first few nights it matters. */
+  function hint(id, text, times = 3, ms = 2800) {
+    if (performance.now() - app.lastHintAt < 1800) return;
+    if (app.hintsShown.has(id)) return;
+    app.hintsShown.add(id);
     if (profile.hint(id, times)) {
       app.lastHintAt = performance.now();
-      hints.show(text);
+      hints.show(text, ms);
     }
   }
 
@@ -201,9 +206,13 @@ async function boot() {
     switch (e.k) {
       case 'kill': {
         const def = SHADES[e.type];
-        fx.burst(e.x, e.y, def?.boss ? 40 : 8, `rgba(255,220,150,0.9)`, def?.boss ? 220 : 90, { quality: app.quality });
+        // Burned away: sparks, a ring in the colour that did it (brighter when it was the colour it wanted), the score.
+        const col = e.match && KILL_HUE[e.hue] ? KILL_HUE[e.hue] : 'rgba(255,226,170,0.95)';
+        fx.burst(e.x, e.y, def?.boss ? 40 : e.match ? 12 : 8, col, def?.boss ? 220 : 90, { quality: app.quality });
         fx.ink(e.x, e.y, def?.boss ? 30 : 6, { quality: app.quality });
-        audio.play('burn', { big: !!def?.boss, hue: e.hue });
+        if (!app.reduced || def?.boss) fx.snap(e.x, e.y, (def?.radius || 12) + 8, col);
+        if (!def?.swarm && e.score > 0) fx.pop(e.x, e.y - (def?.radius || 12), `+${Math.round(e.score)}`, e.match ? col : '#efe6c8');
+        audio.play('burn', { big: !!def?.boss, hue: e.hue, match: !!e.match && !!KILL_HUE[e.hue] });
         if (def?.boss) {
           fx.shake(6, 0.5);
           app.freeze = 0.12;
@@ -532,6 +541,7 @@ async function boot() {
   function showPlay() {
     screens.hide();
     app.screen = 'play';
+    app.watching = !!room.spectating;
     if (room.spectating) {
       hud.hide();
       screens.watching({ night: session.currentRun()?.night || 1 });
@@ -616,7 +626,8 @@ async function boot() {
         return;
       }
       if (N && !app.closed) {
-        if (app.screen !== 'play') showPlay();
+        // A watcher let in between waves gets the table and the HUD at once.
+        if (app.screen !== 'play' || app.watching !== !!room.spectating) showPlay();
         drawNight(N, dt, shake);
         audio.tick(dt, nightAudio(N));
       } else {
@@ -629,7 +640,7 @@ async function boot() {
           scene.frame(demo.view(app.screen === 'title' ? 1 : 0.8), fx, { dt: app.backdropDt, reduced: app.reduced, shake });
           app.backdropDt = 0;
         }
-        audio.tick(dt, null);
+        audio.tick(dt, null, app.screen === 'lobby');
         if (test) driveLobby();
       }
     } catch (e) {
@@ -712,13 +723,20 @@ async function boot() {
     if (test) drive(N);
   }
 
+  /** The first night teaches one idea a wave, in five words or fewer, at the moment it matters. */
   function tutorialHints(N) {
     const S = N.S;
+    const mine = S.pieces.filter((p) => p.owner === me.id).length;
     if (S.phase === 'dusk') {
-      if (!S.pieces.length && !input.trayType) hint('t-pick', 'Pick a mirror from the tray', 4);
-      else if (S.pieces.length === 1 && S.pieces[0].angle === 45) hint('t-turn', 'Tap it. Turn the dial.', 3);
-      else if (S.pieces.length >= 1) hint('t-wave', 'Begin the night when the lane is lit', 3);
-    } else if (S.phase === 'wave' && S.wave === 1) hint('t-focus', 'Moving glass costs Focus now', 2);
+      if (S.t > 1) hint('t-lane', 'They walk the dotted lane', 2, 3200);
+      if (S.t > 5 && !S.pieces.length) hint('t-beam', 'Your beam already lights it', 2, 3200);
+      if (S.t > 9) hint('t-begin', 'Begin the night', 2);
+    } else if (S.phase === 'wave' && S.wave === 0 && S.stats.kills > 0) hint('t-burn', 'Light on a lane burns', 2);
+    else if (S.phase === 'break' && S.wave === 0) {
+      if (!mine) hint('t-bend', 'New lanes. Bend the light.', 2, 3600);
+      else hint('t-turn', 'Tap glass. Turn the dial.', 3, 3200);
+    } else if (S.phase === 'wave' && S.wave === 1) hint('t-focus', 'At night, changes cost Focus', 2);
+    else if (S.phase === 'break' && S.wave === 1) hint('t-red', 'Creepers want red light', 2, 3200);
   }
 
   function nightAudio(N) {

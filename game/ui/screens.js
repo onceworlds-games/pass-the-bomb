@@ -474,7 +474,7 @@ export function makeScreens(root) {
     current = 'watching';
     root.className = 'screen watching';
     root.replaceChildren();
-    root.append(el('div', 'plate watch-note', `Watching night ${v.night}. You join at the next dusk.`));
+    root.append(el('div', 'plate watch-note', `Night ${v.night} · a seat opens between waves`));
     root.hidden = false;
   }
 

@@ -14,6 +14,8 @@ export function makeFx() {
   let shakeAmp = 0;
   let hitStop = 0;
   const rings = []; // slow fades: { x, y, r, t, life, colour }
+  const snaps = []; // quick thin rings where a Shade burns away: { x, y, r, t, colour }
+  const pops = []; // rising figures: { x, y, t, text, colour }
   let seed = 9;
   const rnd = () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -83,6 +85,18 @@ export function makeFx() {
     rings.push({ x, y, r, t: 0, life, colour });
   }
 
+  /** A thin ring that opens where a Shade burns away, in the colour that burned it. */
+  function snap(x, y, r, colour) {
+    if (snaps.length >= 24) snaps.shift();
+    snaps.push({ x, y, r, t: 0, colour });
+  }
+
+  /** A figure that rises and fades (what a kill scored). */
+  function pop(x, y, text, colour) {
+    if (pops.length >= 10) pops.shift();
+    pops.push({ x, y, t: 0, text: String(text).slice(0, 8), colour });
+  }
+
   /** Advances everything; returns the camera offset to apply (css px) and whether the sim should hold. */
   function step(dt, opts = {}) {
     const reduced = !!opts.reduced;
@@ -107,6 +121,14 @@ export function makeFx() {
       rings[i].t += dt;
       if (rings[i].t >= rings[i].life) rings.splice(i, 1);
     }
+    for (let i = snaps.length - 1; i >= 0; i--) {
+      snaps[i].t += dt;
+      if (snaps[i].t >= 0.45) snaps.splice(i, 1);
+    }
+    for (let i = pops.length - 1; i >= 0; i--) {
+      pops[i].t += dt;
+      if (pops[i].t >= 0.95) pops.splice(i, 1);
+    }
     if (shakeT > 0 && !reduced) {
       shakeT -= dt;
       const k = clamp(shakeT / 0.35, 0, 1) * shakeAmp;
@@ -120,32 +142,63 @@ export function makeFx() {
     return { x: shakeX, y: shakeY, hold: hitStop > 0 };
   }
 
+  /** Draws in the table's coordinates; `opts.k` keeps sparks and figures at a screen size, `opts.upright` turns text. */
   function draw(ctx, opts = {}) {
+    const k = opts.k || 1;
     ctx.save();
+    for (const sn of snaps) {
+      const u = sn.t / 0.45;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = (1 - u) * 0.9;
+      ctx.strokeStyle = sn.colour;
+      ctx.lineWidth = (2.4 - 1.6 * u) * k;
+      ctx.beginPath();
+      ctx.arc(sn.x, sn.y, sn.r * (0.6 + 0.9 * (1 - (1 - u) * (1 - u))), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     for (const rg of rings) {
-      const k = rg.t / rg.life;
-      const a = Math.sin(k * Math.PI) * 0.6;
-      const g = ctx.createRadialGradient(rg.x, rg.y, rg.r * k * 0.2, rg.x, rg.y, rg.r * (0.3 + 0.7 * k));
+      const u = rg.t / rg.life;
+      const a = Math.sin(u * Math.PI) * 0.6;
+      const g = ctx.createRadialGradient(rg.x, rg.y, rg.r * u * 0.2, rg.x, rg.y, rg.r * (0.3 + 0.7 * u));
       g.addColorStop(0, rg.colour.replace('A', (a * 0.8).toFixed(3)));
       g.addColorStop(1, rg.colour.replace('A', '0'));
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(rg.x, rg.y, rg.r * (0.3 + 0.7 * k), 0, Math.PI * 2);
+      ctx.arc(rg.x, rg.y, rg.r * (0.3 + 0.7 * u), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
     for (let i = 0; i < live; i++) {
       const p = pool[i];
-      const k = 1 - p.life / p.max;
       ctx.globalCompositeOperation = p.add ? 'lighter' : 'source-over';
-      ctx.globalAlpha = k;
+      ctx.globalAlpha = 1 - p.life / p.max;
       ctx.fillStyle = p.colour;
-      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      const sz = p.size * k;
+      ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+    }
+    if (pops.length) {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.font = `600 ${Math.round(15 * k)}px "Cormorant", Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const pp of pops) {
+        const u = pp.t / 0.95;
+        ctx.save();
+        if (opts.upright) opts.upright(ctx, pp.x, pp.y);
+        else ctx.translate(pp.x, pp.y);
+        ctx.globalAlpha = u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85;
+        const rise = -(10 + 26 * (1 - (1 - u) * (1 - u))) * k;
+        ctx.fillStyle = 'rgba(5,6,10,0.8)';
+        ctx.fillText(pp.text, 0, rise + 1.2 * k);
+        ctx.fillStyle = pp.colour;
+        ctx.fillText(pp.text, 0, rise);
+        ctx.restore();
+      }
     }
     ctx.restore();
-    void opts;
   }
 
-  return { burst, chips, ink, shake, stop, ring, step, draw, get count() { return live; }, PALETTE };
+  return { burst, chips, ink, shake, stop, ring, snap, pop, step, draw, get count() { return live; }, PALETTE };
 }
