@@ -1,8 +1,38 @@
 {
   "slug": "glint",
   "name": "Glint",
-  "description": "Bend light with mirrors, prisms and lenses to burn back the Shades. Solo or up to four.",
+  "description": "Bend one lamp's light through mirrors, prisms and lenses and burn back the Shades. Twelve nights, alone or with three friends.",
   "dir": "game",
   "productionBranch": "main",
-  "genre": "Strategy"
+  "genre": "Strategy",
+  "icon": "store/icon.png",
+  "thumbnails": ["store/thumb-1.webp", "store/thumb-2.webp", "store/thumb-3.webp", "store/thumb-4.webp"],
+  "controls": [
+    { "keys": ["1", "9"], "action": "Pick glass from the tray" },
+    { "keys": ["Click"], "action": "Place, select, or tap a cell" },
+    { "keys": ["Drag"], "action": "Move glass, aim the Lamp, turn the dial" },
+    { "keys": ["Q", "E", "Wheel"], "action": "Turn the selected glass" },
+    { "keys": ["Shift"], "action": "Fine turns of 5 degrees" },
+    { "keys": ["X", "Right click"], "action": "Sell to the tray" },
+    { "keys": ["Space"], "action": "Begin the night or the next wave" },
+    { "keys": ["F"], "action": "Flare at the pointer" },
+    { "keys": ["R"], "action": "Dawn (when the meter is full)" },
+    { "keys": ["G"], "action": "Focus Surge" },
+    { "keys": ["Alt"], "action": "Show every beam's power" },
+    { "keys": ["+", "-"], "action": "Zoom the table" }
+  ],
+  "help": "Route the Lamp's beam through glass so it lies along the lanes the Shades walk. Mirrors bounce, splitters halve, prisms fan into colours, lenses focus to a burning point. Matching colour burns hardest; Veils ignore white. Too much light on one piece cracks it. At dusk everything is free; at night changes cost Focus.",
+  "badges": [
+    { "id": "first-burn", "name": "First Burn", "description": "Burn a Shade.", "icon": "store/badges/first-burn.png" },
+    { "id": "rainbow", "name": "Rainbow", "description": "Burn Shades with red, green and blue light in one night.", "icon": "store/badges/rainbow.png" },
+    { "id": "focus-point", "name": "Focus Point", "description": "Burn a Shade with a focused beam in under a second.", "icon": "store/badges/focus-point.png" },
+    { "id": "mirror-maze", "name": "Mirror Maze", "description": "Burn a Shade with a beam that bounced ten times.", "icon": "store/badges/mirror-maze.png" },
+    { "id": "heat-wave", "name": "Heat Wave", "description": "Crack a piece of glass and still see the dawn.", "icon": "store/badges/heat-wave.png" },
+    { "id": "umbra-down", "name": "Umbra Down", "description": "Put Umbra down.", "icon": "store/badges/umbra-down.png" },
+    { "id": "lens-eater-down", "name": "Lens-Eater Down", "description": "Burn the Lens-Eater's eye for good.", "icon": "store/badges/lens-eater-down.png" },
+    { "id": "long-dusk-done", "name": "Long Dusk Done", "description": "Finish a twelve-night run.", "icon": "store/badges/long-dusk-done.png" },
+    { "id": "twin-hearts", "name": "Twin Hearts", "description": "Finish a run on the Twin Hearts board.", "icon": "store/badges/twin-hearts.png" },
+    { "id": "ascendant", "name": "Ascendant", "description": "Finish a run at Longer Dusk 4 or higher.", "icon": "store/badges/ascendant.png" },
+    { "id": "daily-dusk", "name": "Daily Dusk", "description": "Finish a Daily Dusk run.", "icon": "store/badges/daily-dusk.png" }
+  ]
 }

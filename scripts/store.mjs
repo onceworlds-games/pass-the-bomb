@@ -6,10 +6,10 @@ import { serve, launch, sleep } from './cdp.mjs';
 
 const BADGES = ['first-burn', 'rainbow', 'focus-point', 'mirror-maze', 'heat-wave', 'umbra-down', 'lens-eater-down', 'long-dusk-done', 'twin-hearts', 'ascendant', 'daily-dusk'];
 const SHOTS = [
-  ['thumb1', 1280, 720, 'store/thumb-1.png'],
-  ['thumb2', 1280, 720, 'store/thumb-2.png'],
-  ['thumb3', 1280, 720, 'store/thumb-3.png'],
-  ['thumb4', 1280, 720, 'store/thumb-4.png'],
+  ['thumb1', 1280, 720, 'store/thumb-1.webp'],
+  ['thumb2', 1280, 720, 'store/thumb-2.webp'],
+  ['thumb3', 1280, 720, 'store/thumb-3.webp'],
+  ['thumb4', 1280, 720, 'store/thumb-4.webp'],
   ['icon', 512, 512, 'store/icon.png'],
   ...BADGES.map((id) => [`badge-${id}`, 256, 256, `store/badges/${id}.png`]),
 ];
@@ -29,7 +29,8 @@ for (const [kind, w, h, out] of SHOTS) {
     ok = (await b.evaluate('window.__posterReady === true')) === true;
   }
   await sleep(kind.startsWith('badge') ? 150 : 600);
-  const r = await b.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: w, height: h, scale: 1 } });
+  const webp = out.endsWith('.webp');
+  const r = await b.send('Page.captureScreenshot', { format: webp ? 'webp' : 'png', quality: webp ? 92 : undefined, clip: { x: 0, y: 0, width: w, height: h, scale: 1 } });
   writeFileSync(out, Buffer.from(r.result.data, 'base64'));
   console.log(ok ? 'saved' : 'TIMEOUT', out);
 }

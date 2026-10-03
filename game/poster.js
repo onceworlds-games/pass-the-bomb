@@ -46,20 +46,25 @@ const SCENES = {
     spawn(N, 'wisp', 'w', 1040, 470);
   },
   thumb2(N) {
-    // The focus burn: a lens narrows the beam onto a Veil in its colour.
+    // The focus burn: the prism's red leaves through a filter and a lens, to a burning point on a Veil.
     place(N, 'prism', 3, 6, 95);
-    place(N, 'filter-b', 6, 7, 0);
-    place(N, 'lens', 8, 7, 90);
-    place(N, 'mirror', 3, 2, 45);
-    place(N, 'mirror', 12, 2, 135);
-    place(N, 'concave', 12, 5, 0);
+    place(N, 'filter-r', 6, 6, 0);
+    place(N, 'lens', 9, 5, 90);
+    place(N, 'mirror', 13, 2, 135);
+    place(N, 'mirror', 13, 7, 45);
+    place(N, 'concave', 16, 7, 90);
     N.command('p', { op: 'lamp', i: 0, angle: 0 });
-    const v = spawn(N, 'veil', 'b', 8.5 * CELL + 170, 7.5 * CELL + 8);
-    v.hp = 20;
-    v.burn = 0.9;
-    spawn(N, 'veil', 'b', 980, 560);
-    spawn(N, 'creeper', 'r', 900, 150);
-    spawn(N, 'twain', 'g', 1100, 700);
+    const tr = traceBeams({ board: N.board, pieces: N.S.pieces, lamps: N.S.lamps.map((L) => ({ ...L, power: 100 })), t: 0, mods: N.mods });
+    const focus = tr.segments.find((s) => s.end === 'focus');
+    const fx = focus ? focus.x1 : 800;
+    const fy = focus ? focus.y1 : 360;
+    const v = spawn(N, 'veil', 'r', fx + 6, fy + 2);
+    v.hp = 14;
+    v.burn = 1;
+    spawn(N, 'veil', 'r', fx + 150, fy + 40);
+    spawn(N, 'veil', 'r', 1040, 560);
+    spawn(N, 'creeper', 'g', 980, 170);
+    spawn(N, 'twain', 'b', 1120, 700);
   },
   thumb3(N) {
     // A boss night: Umbra with its shadows, three beams slicing across a darkened table.
@@ -74,7 +79,8 @@ const SCENES = {
     const u = spawn(N, 'umbra', 'r', 980, 440, 1);
     u.hp = 300;
     u.phase = 1;
-    N.S.shadows.push({ x: 560, y: 180, r: 80, until: 1e9 }, { x: 1100, y: 640, r: 80, until: 1e9 });
+    u.castAt = 1e9;
+    N.S.shadows.push({ x: 560, y: 180, r: 80, until: 1e9 }, { x: 1100, y: 640, r: 80, until: 1e9 }, { x: 760, y: 700, r: 70, until: 1e9 });
     for (let i = 0; i < 6; i++) spawn(N, 'wisp', 'w', 1150 + i * 30, 300 + i * 50);
     spawn(N, 'gloom', 'g', 700, 700);
     spawn(N, 'eater', 'w', 420, 700);
@@ -162,16 +168,28 @@ function icon(canvas) {
   g.addColorStop(1, '#06090a');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 512, 512);
-  // One beam into a prism, three colours out: the whole game in one picture.
-  const board = buildBoard('octagon');
-  const pieces = [{ id: 1, type: 'prism', c: 7, r: 6, angle: 90, cracked: 0, t0: 0, pulseUntil: 0 }];
-  const lamps = [{ x: 7.5 * CELL - 300, y: 6.5 * CELL, angle: 0, power: 130, radius: 22 }];
-  const tr = traceBeams({ board, pieces, lamps, t: 0, mods: baseMods() });
+  // One beam into a prism, three colours out: the whole game in one picture. The fan is opened wider than the
+  // table's optics would, so it reads at 64 px.
   const beams = makeBeamRenderer();
-  const k = 1.55;
-  ctx.setTransform(k, 0, 0, k, 256 - 7.5 * CELL * k + 60, 256 - 6.5 * CELL * k);
-  beams.draw(ctx, tr.segments, null, { quality: 'low', dt: 0 });
-  drawPiece(ctx, pieces[0], 0, { quality: 'high' });
+  const seg = (x0, y0, x1, y1, c, w) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    return { x0, y0, x1, y1, dx: dx / len, dy: dy / len, len, ...c, w0: w, w1: w, wBase: w, wMin: 3, f: 0, spread: 0, since: 0, depth: 0, lamp: 0, end: 'rim' };
+  };
+  const px = 236;
+  const py = 256;
+  const segs = [
+    seg(-20, py, px - 26, py, { r: 50, g: 50, b: 50 }, 16),
+    seg(px + 22, py - 10, 560, py - 150, { r: 0, g: 0, b: 150 }, 14),
+    seg(px + 22, py, 560, py, { r: 0, g: 150, b: 0 }, 14),
+    seg(px + 22, py + 10, 560, py + 150, { r: 150, g: 0, b: 0 }, 14),
+  ];
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  beams.draw(ctx, segs, null, { quality: 'low', dt: 0 });
+  const k = 2.6;
+  ctx.setTransform(k, 0, 0, k, px - 0.5 * CELL * k, py - 0.5 * CELL * k);
+  drawPiece(ctx, { id: 1, type: 'prism', c: 0, r: 0, angle: 90, cracked: 0, t0: 0, pulseUntil: 0 }, 0, { quality: 'high' });
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   window.__posterReady = true;
 }
