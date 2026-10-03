@@ -32,22 +32,29 @@ export function makeInput(canvas, scene, api) {
   const pieceById = (id) => api.pieces().find((p) => p.id === id);
   const centre = (p) => ({ x: (p.c + 0.5) * CELL, y: (p.r + 0.5) * CELL });
 
+  /** The dial keeps a screen size (a 64 px ring, 44 px targets) however far the table is zoomed out. */
+  function dialSizes() {
+    const k = 1 / Math.max(0.2, scene.view.scale);
+    return { R: Math.max(DIAL_R, 66 * k), H: Math.max(HANDLE_R, 22 * k), S: Math.max(SELL_R, 22 * k) };
+  }
+
   function dialGeometry(p) {
     const c = centre(p);
     const a = normDeg(p.angle);
     const rad = (a * Math.PI) / 180;
-    return { cx: c.x, cy: c.y, hx: c.x + Math.cos(rad) * DIAL_R, hy: c.y + Math.sin(rad) * DIAL_R, sx: c.x + DIAL_R * 0.95, sy: c.y - DIAL_R * 0.95 };
+    const { R } = dialSizes();
+    return { cx: c.x, cy: c.y, hx: c.x + Math.cos(rad) * R, hy: c.y + Math.sin(rad) * R, sx: c.x + R * 0.95, sy: c.y - R * 0.95, R };
   }
 
   function hitDial(w, p) {
     if (!p) return null;
     const g = dialGeometry(p);
-    const scale = Math.max(1, 1.2 / Math.max(0.3, scene.view.scale));
-    if (Math.hypot(w.x - g.sx, w.y - g.sy) <= SELL_R * scale + 4) return 'sell';
+    const { H, S } = dialSizes();
+    if (Math.hypot(w.x - g.sx, w.y - g.sy) <= S + 4) return 'sell';
     if (!oriented(p.type) && p.type !== 'combiner' && p.type !== 'crystal' && p.type !== 'shutter') return null;
-    if (Math.hypot(w.x - g.hx, w.y - g.hy) <= HANDLE_R * scale + 6) return 'handle';
+    if (Math.hypot(w.x - g.hx, w.y - g.hy) <= H + 6) return 'handle';
     const d = Math.hypot(w.x - g.cx, w.y - g.cy);
-    if (d > DIAL_R - 14 && d < DIAL_R + 14) return 'ring';
+    if (d > g.R - H && d < g.R + H) return 'ring';
     return null;
   }
 
@@ -332,54 +339,58 @@ export function makeInput(canvas, scene, api) {
     const p = st.sel ? pieceById(st.sel) : null;
     if (!p) return;
     const g = dialGeometry(p);
+    const { R, H, S } = dialSizes();
+    const k = R / DIAL_R; // line widths and type grow with the ring so they keep their screen size
     const turnable = oriented(p.type) || p.type === 'combiner' || p.type === 'crystal' || p.type === 'shutter';
     ctx.save();
     ctx.translate(g.cx, g.cy);
     if (turnable) {
       ctx.strokeStyle = 'rgba(240,215,138,0.55)';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * k;
       ctx.beginPath();
-      ctx.arc(0, 0, DIAL_R, 0, Math.PI * 2);
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
       ctx.stroke();
       for (let d = 0; d < 360; d += 15) {
         const rad = (d * Math.PI) / 180;
         const major = d % 45 === 0;
         ctx.strokeStyle = major ? PALETTE.brassHi : 'rgba(240,215,138,0.5)';
-        ctx.lineWidth = major ? 2 : 1;
+        ctx.lineWidth = (major ? 2 : 1) * k;
+        const len = (major ? 7 : 4) * k;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(rad) * (DIAL_R - (major ? 7 : 4)), Math.sin(rad) * (DIAL_R - (major ? 7 : 4)));
-        ctx.lineTo(Math.cos(rad) * (DIAL_R + (major ? 7 : 4)), Math.sin(rad) * (DIAL_R + (major ? 7 : 4)));
+        ctx.moveTo(Math.cos(rad) * (R - len), Math.sin(rad) * (R - len));
+        ctx.lineTo(Math.cos(rad) * (R + len), Math.sin(rad) * (R + len));
         ctx.stroke();
       }
       // The handle.
       ctx.fillStyle = PALETTE.brass;
       ctx.strokeStyle = PALETTE.brassHi;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * k;
       ctx.beginPath();
-      ctx.arc(g.hx - g.cx, g.hy - g.cy, HANDLE_R, 0, Math.PI * 2);
+      ctx.arc(g.hx - g.cx, g.hy - g.cy, H, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#2a1a08';
-      ctx.font = '600 15px "Cormorant", serif';
+      ctx.font = `600 ${Math.round(15 * k)}px "Cormorant", serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`${Math.round(normDeg(p.angle))}°`, g.hx - g.cx, g.hy - g.cy + 1);
+      ctx.fillText(`${Math.round(normDeg(p.angle))}°`, g.hx - g.cx, g.hy - g.cy + k);
     }
     // Sell: a small brass button with an X, top right of the ring.
     ctx.fillStyle = '#4a2e1c';
     ctx.strokeStyle = PALETTE.brass;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * k;
     ctx.beginPath();
-    ctx.arc(g.sx - g.cx, g.sy - g.cy, SELL_R, 0, Math.PI * 2);
+    ctx.arc(g.sx - g.cx, g.sy - g.cy, S, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.strokeStyle = PALETTE.bone;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.5 * k;
+    const x6 = 6 * k;
     ctx.beginPath();
-    ctx.moveTo(g.sx - g.cx - 6, g.sy - g.cy - 6);
-    ctx.lineTo(g.sx - g.cx + 6, g.sy - g.cy + 6);
-    ctx.moveTo(g.sx - g.cx + 6, g.sy - g.cy - 6);
-    ctx.lineTo(g.sx - g.cx - 6, g.sy - g.cy + 6);
+    ctx.moveTo(g.sx - g.cx - x6, g.sy - g.cy - x6);
+    ctx.lineTo(g.sx - g.cx + x6, g.sy - g.cy + x6);
+    ctx.moveTo(g.sx - g.cx + x6, g.sy - g.cy - x6);
+    ctx.lineTo(g.sx - g.cx - x6, g.sy - g.cy + x6);
     ctx.stroke();
     ctx.restore();
     void t;

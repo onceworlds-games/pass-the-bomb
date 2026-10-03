@@ -515,6 +515,8 @@ async function boot() {
       const portrait = innerHeight > innerWidth * 1.2;
       scene.setInsets(hud.insets(portrait));
       scene.layout();
+      // A small screen opens zoomed so a cell is at least 30 px to tap; the buttons zoom back out.
+      if (scene.view.fit * CELL < 30 && scene.view.zoom === 1) scene.setZoom(Math.min(3, 30 / (scene.view.fit * CELL)));
     }
     try {
       room.hideLobby?.(true);

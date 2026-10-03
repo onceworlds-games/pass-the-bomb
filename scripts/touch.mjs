@@ -71,13 +71,13 @@ await shot('placed');
 await tap(x, y);
 await sleep(300);
 await shot('dial');
-const h = 58 * scale;
+const h = Math.max(58 * scale, 66); // the dial keeps a screen size
 await drag(x + h * Math.cos(Math.PI / 4), y + h * Math.sin(Math.PI / 4), x + h * Math.cos(Math.PI * 0.75), y + h * Math.sin(Math.PI * 0.75), 10);
 await sleep(300);
 const angle = await b.evaluate('window.__glint.session.night().S.pieces[0]?.angle');
 console.log('angle after the dial', angle, 'scale', scale.toFixed(2));
 await shot('turned');
-await tap(x + 58 * 0.95 * scale, y - 58 * 0.95 * scale);
+await tap(x + h * 0.95, y - h * 0.95);
 await sleep(300);
 const left = await b.evaluate('window.__glint.session.night().S.pieces.length');
 console.log('pieces after sell', left);
