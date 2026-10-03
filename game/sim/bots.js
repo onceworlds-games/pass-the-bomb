@@ -81,6 +81,20 @@ export function evaluateLayout(N, pieces, lampAngles, hues, arcs, opts = {}) {
       score += pr.w * pr.hp * (share >= 1 ? 1.25 : share * share);
     }
   }
+  // Stationary targets (a boss that sits, a boss that chews): what a beam does to it over the next while.
+  for (const tg of opts.targets || []) {
+    let dps = 0;
+    for (const seg of segs) {
+      const P = seg.r + seg.g + seg.b;
+      const q = pointSegment(tg.x, tg.y, seg.x0, seg.y0, seg.x1, seg.y1);
+      const w = seg.w0 + (seg.w1 - seg.w0) * q.u;
+      const inner = w * 0.5 + tg.r;
+      if (q.d > inner + HALO) continue;
+      const halo = q.d > inner ? HALO_SHARE * (1 - (q.d - inner) / HALO) : 1;
+      dps += halo * K_DAMAGE * P * colourMult(tg, seg, mods) * (W0 / Math.max(1, w));
+    }
+    score += Math.min(tg.hp, dps * 25) * 1.5;
+  }
   // Heat: a piece whose steady heat would pass the cap is a crack waiting to happen.
   for (const p of pieces) {
     const l = trace.load.get(p.id);
@@ -342,16 +356,17 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
   let nextLive = 0;
   let nextLamp = 0;
   let plannedFor = -1;
+  let nextBoss = 0;
   const pending = []; // commands waiting for Focus
 
   /** Re-plans the table for a wave (its arcs and hues) from the layout as it stands, as a player does at a break. */
-  function replan(waveIndex) {
+  function replan(waveIndex, targets = []) {
     const w = N.plan.waves[waveIndex];
     if (!w) return;
     const wHues = colour ? w.hues : [];
     const wLocked = colour && w.entries.some((e) => e.type === 'veil');
     const cur = cloneLayout(N);
-    const evalFn = (L) => evaluateLayout(N, L.pieces, L.lamps, wHues, w.arcs, { locked: wLocked });
+    const evalFn = (L) => evaluateLayout(N, L.pieces, L.lamps, wHues, w.arcs, { locked: wLocked, targets });
     const saved = iterations;
     const { layout } = search(cur, evalFn, Math.round(saved * 0.45), w.arcs);
     for (let i = 0; i < layout.pieces.length; i++) {
@@ -419,6 +434,15 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
         plannedFor = S.wave + 1;
         replan(plannedFor);
       }
+      // A boss on the table: every few seconds, re-route the glass to burn it where it is, in its colour.
+      if (S.phase === 'wave' && S.t >= nextBoss) {
+        const boss = S.shades.find((s) => (s.type === 'longdusk' || s.type === 'umbra' || s.type === 'lenseater') && s.state !== 'dead' && s.state !== 'hit');
+        if (boss) {
+          nextBoss = S.t + (boss.type === 'longdusk' ? 10 : 6);
+          pending.length = 0;
+          replan(S.wave, [{ x: boss.x, y: boss.y, r: boss.r, hp: boss.hp, type: boss.type, hue: boss.hue, phase: boss.phase }]);
+        }
+      }
       flushPending();
       if (S.phase !== 'wave' || pending.length) return;
       const pl = N.player(pid);
@@ -483,7 +507,7 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
     },
     /** Drafting policy at dawn: index of the option to take. */
     draft(options) {
-      return pickDraft(kind, options, rng);
+      return pickDraft(kind, options, rng, N.S.deck);
     },
     takeFate() {
       return colour ? rng.chance(0.5) : rng.chance(0.3);
@@ -492,7 +516,7 @@ export function makeBot(kind, N, pid, rng, opts = {}) {
 }
 
 /** The option a bot of this kind takes from a dawn draft. */
-export function pickDraft(kind, options, rng) {
+export function pickDraft(kind, options, rng, deck = {}) {
   if (!options || !options.length) return 0;
   if (kind === 'random') return rng.int(0, options.length - 1);
   const colour = kind === 'colour';
@@ -500,7 +524,11 @@ export function pickDraft(kind, options, rng) {
   let bestV = -Infinity;
   options.forEach((o, i) => {
     let v = 0;
-    if (o.kind === 'piece') v = ((colour ? PIECE_PRIORITY : HILL_PRIORITY)[o.id] ?? 1) * (o.n || 1) + (colour && o.id === 'prism' ? 3 : 0);
+    if (o.kind === 'piece') {
+      const have = deck[o.id] || 0;
+      v = ((colour ? PIECE_PRIORITY : HILL_PRIORITY)[o.id] ?? 1) * (o.n || 1) + (colour && o.id === 'prism' && have === 0 ? 3 : 0);
+      v /= o.id === 'mirror' ? 1 + 0.1 * have : 1 + 0.6 * have;
+    }
     else if (o.kind === 'relic') v = colour ? 6 - RELIC_PRIORITY.indexOf(o.id) * 0.2 : 2.5;
     else if (o.kind === 'upgrade') v = colour ? 5 - UPGRADE_PRIORITY.indexOf(o.id) * 0.4 : 2;
     if (v > bestV) {

@@ -54,7 +54,7 @@ function standardRun(kind, night, seed) {
   for (let n = 1; n < night; n++) {
     R.phase = 'dawn';
     R.draft = makeDraft(R);
-    applyDraft(R, pickDraft(kind, R.draft.options, rng));
+    applyDraft(R, pickDraft(kind, R.draft.options, rng, R.deck));
     nextNight(R);
   }
   R.heart.hp = R.heart.max;
@@ -90,7 +90,7 @@ function runsTable() {
         endNight(R, res.N, 0);
         if (R.phase === 'lost') break;
         alive[R.night]++;
-        if (R.draft) applyDraft(R, pickDraft(kind, R.draft.options, rng));
+        if (R.draft) applyDraft(R, pickDraft(kind, R.draft.options, rng, R.deck));
         if (R.fate) applyFate(R, rng.chance(kind === 'colour' ? 0.5 : 0.3));
         nextNight(R);
       }

@@ -13,7 +13,7 @@ export function waveCount(night) {
 }
 
 export function nightBudget(night, ascension = 0) {
-  return 110 * Math.pow(1.18, night - 1) * (1 + 0.08 * ascension);
+  return 100 * Math.pow(1.17, night - 1) * (1 + 0.08 * ascension);
 }
 
 export function waveDuration(night) {
@@ -22,7 +22,7 @@ export function waveDuration(night) {
 
 /** Shade hp multiplier for a night (counts grow with the budget; bodies thicken slowly too). */
 export function nightHp(night, ascension = 0) {
-  return (1 + 0.06 * Math.max(0, night - 3)) * (1 + 0.1 * Math.min(ascension, 1)) * (night > RUN_NIGHTS ? 1 + 0.12 * (night - RUN_NIGHTS) : 1);
+  return (1 + 0.04 * Math.max(0, night - 3)) * (1 + 0.1 * Math.min(ascension, 1)) * (night > RUN_NIGHTS ? 1 + 0.12 * (night - RUN_NIGHTS) : 1);
 }
 
 /** Boss for a night: the three of the run, then a cycle through Endless with thicker bodies. */
@@ -108,6 +108,8 @@ export function planNight({ seed, night, board, ascension = 0, tutorial = false 
       const type = pickWeighted(rng, types);
       const def = SHADES[type];
       let n = def.swarm || rng.int(2, Math.min(5, 2 + Math.floor(night / 2)));
+      // Heavy ink comes in twos and threes, never a wall of it.
+      if (!def.swarm) n = Math.min(n, def.cost >= 25 ? 2 : def.cost >= 15 ? 3 : n);
       const cost = def.cost * n;
       if (cost > left * 1.35 && !def.swarm) {
         n = Math.max(1, Math.floor(left / def.cost));

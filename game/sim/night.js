@@ -480,11 +480,11 @@ export function createNight(cfg) {
           S.lampFlicker = 1;
           ev('flicker', { id: s.id });
         }
-        if (S.t >= (s.escortAt || 0) && aliveCount() < 40) {
-          s.escortAt = S.t + 8;
+        if (S.t >= (s.escortAt || 0) && aliveCount() < 25) {
+          s.escortAt = S.t + 12;
           const picks = plan.waves[S.wave]?.entries.filter((e) => !SHADES[e.type].boss) || [];
           const e = picks.length ? rng.pick(picks) : { type: 'wisp', hue: 'r', arc: s.arc };
-          for (let k = 0; k < 3; k++) spawnOne({ type: e.type, hue: HUES[s.phase], arc: rng.int(0, board.arcs.length - 1) });
+          for (let k = 0; k < 2; k++) spawnOne({ type: e.type, hue: HUES[s.phase], arc: rng.int(0, board.arcs.length - 1) });
         }
       }
     }
