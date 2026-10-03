@@ -799,7 +799,7 @@ async function boot() {
     } else if (S.phase === 'wave' && S.wave === 0 && S.stats.kills > 0) hint('t-burn', 'Light on a lane burns', 2);
     else if (S.phase === 'break' && S.wave === 0) {
       if (!mine) hint('t-bend', 'New lanes. Bend the light.', 2, 3600);
-      else hint('t-turn', 'Tap glass. Turn the dial.', 3, 3200);
+      else hint('t-turn', 'Select glass. Turn its dial.', 3, 3200);
     } else if (S.phase === 'wave' && S.wave === 1) hint('t-focus', 'At night, changes cost Focus', 2);
     else if (S.phase === 'break' && S.wave === 1) hint('t-red', 'Creepers want red light', 2, 3200);
   }
