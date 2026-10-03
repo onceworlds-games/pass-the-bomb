@@ -11,8 +11,8 @@
     { "keys": ["1", "9"], "action": "Pick glass from the tray" },
     { "keys": ["Click"], "action": "Place, select, or tap a cell" },
     { "keys": ["Drag"], "action": "Move glass, aim the Lamp, turn the dial" },
-    { "keys": ["Q", "E", "Wheel"], "action": "Turn the selected glass" },
-    { "keys": ["Shift"], "action": "Fine turns of 5 degrees" },
+    { "keys": ["Q", "E", "Wheel"], "action": "Turn glass (hold Shift for 5° steps)" },
+    { "keys": ["Z"], "action": "Undo your last change" },
     { "keys": ["X", "Right click"], "action": "Sell to the tray" },
     { "keys": ["Space"], "action": "Begin the night or the next wave" },
     { "keys": ["F"], "action": "Flare at the pointer" },
@@ -21,7 +21,7 @@
     { "keys": ["Alt"], "action": "Show every beam's power" },
     { "keys": ["+", "-"], "action": "Zoom the table" }
   ],
-  "help": "Route the Lamp's beam through glass so it lies along the lanes the Shades walk. Mirrors bounce, splitters halve, prisms fan into colours, lenses focus to a burning point. Matching colour burns hardest; Veils ignore white. Too much light on one piece cracks it. At dusk everything is free; at night changes cost Focus.",
+  "help": "Route the Lamp's beam through glass so it lies along the lanes the Shades walk. Mirrors bounce, splitters halve, prisms fan into colours, lenses focus to a burning point, a concave lens spreads light into a fence. Matching colour burns hardest; Veils ignore white. Too much light on one piece cracks it. At dusk changes are free; at night they cost Focus. Undo takes back your last one.",
   "badges": [
     { "id": "first-burn", "name": "First Burn", "description": "Burn a Shade.", "icon": "store/badges/first-burn.png" },
     { "id": "rainbow", "name": "Rainbow", "description": "Burn Shades with red, green and blue light in one night.", "icon": "store/badges/rainbow.png" },
