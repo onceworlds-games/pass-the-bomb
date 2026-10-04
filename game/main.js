@@ -621,11 +621,13 @@ async function boot() {
           return;
         }
         // Between nights the table keeps running on its own: a slow demo night on the Octagon. Behind a page of
-        // the logbook it is drawn at half rate (it is mostly covered, and phones have better things to do).
-        // A device that takes long over it draws it less often still (the room's connection matters more).
+        // the logbook it is mostly covered, so a device that is not drawing at High graphics (a phone, or Graphics
+        // set lower) draws it at half rate; at High it is every frame, as on the title and in a night (the draw
+        // takes under a millisecond). A device that takes long over it draws it less often still (the room's
+        // connection matters more).
         if (scene.board !== demo.board) scene.setBoard(demo.board, profile.p.cosmetics);
         app.backdropDt += dt;
-        const every = (app.screen === 'title' ? 1 : 2) * (app.backdropCost > 22 ? 2 : 1);
+        const every = (app.screen === 'title' || app.quality === 'high' ? 1 : 2) * (app.backdropCost > 22 ? 2 : 1);
         if (app.frameNo++ % every === 0) {
           const t0 = performance.now();
           demo.step(app.backdropDt, app.reduced ? 0.45 : 0.7);
