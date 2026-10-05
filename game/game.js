@@ -152,6 +152,7 @@ export function startGame({ ow, room, standalone, canvas }) {
     bgCanvas.width = canvas.width;
     bgCanvas.height = canvas.height;
     const g = bgCanvas.getContext('2d');
+    if (!g) return bgCanvas;
     g.setTransform(pr, 0, 0, pr, 0, 0);
     paintBackground(g, view, map);
     return bgCanvas;

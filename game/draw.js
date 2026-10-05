@@ -37,6 +37,8 @@ export function mix(a, b, t) {
   }
   return v;
 }
+/** A player's color by index, whatever the index (it came from another player's page). */
+export const colorOf = (c) => PLAYER_COLORS[(((Math.trunc(c) || 0) % PLAYER_COLORS.length) + PLAYER_COLORS.length) % PLAYER_COLORS.length];
 export const shade = (hex, amt) => (amt >= 0 ? mix(hex, '#ffffff', amt) : mix(hex, '#000000', -amt));
 export const easeOutBack = (k) => {
   const c1 = 1.9;
@@ -752,7 +754,7 @@ export function newFig(id) {
 
 /** A head: the player's avatar when it has loaded, else a face in their color (bots wear an antenna). */
 export function drawHead(ctx, x, y, r, f, lw, t) {
-  const col = PLAYER_COLORS[f.c % PLAYER_COLORS.length];
+  const col = colorOf(f.c);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.lineWidth = lw;
@@ -958,7 +960,7 @@ export function drawFigure(ctx, v, f, t) {
     drawGhost(ctx, v, f, t, gx, gy);
     return;
   }
-  const col = PLAYER_COLORS[f.c % PLAYER_COLORS.length];
+  const col = colorOf(f.c);
   const lift = f.z * u;
   ctx.globalAlpha = f.alpha;
   const sh = 1 - Math.min(0.6, f.z * 0.08);

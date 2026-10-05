@@ -152,7 +152,7 @@ function check(g) {
     if (!g || typeof g !== 'object') return false;
     const arr = Array.isArray;
     if (!arr(g.roster) || g.roster.length < 1 || g.roster.length > 16 || !arr(g.bombs) || g.bombs.length > 4 || !arr(g.out) || !arr(g.gone) || !arr(g.drops) || !arr(g.pl) || !arr(g.first)) return false;
-    for (const r of g.roster) if (!r || typeof r.id !== 'string' || typeof r.n !== 'string' || !Number.isFinite(r.c)) return false;
+    for (const r of g.roster) if (!r || typeof r.id !== 'string' || typeof r.n !== 'string' || !Number.isInteger(r.c) || r.c < 0 || r.c > 11) return false;
     for (const b of g.bombs) if (!b || typeof b.h !== 'string' || ![b.k, b.b, b.s, b.p, b.a].every(Number.isFinite)) return false;
     for (const o of g.out) if (!o || typeof o.id !== 'string' || !Number.isFinite(o.t)) return false;
     for (const k of ['imm', 'stun', 'scores', 'rs', 'st']) if (!g[k] || typeof g[k] !== 'object') return false;
@@ -297,6 +297,7 @@ export function createNet(room, ow, hooks) {
     const g = validG();
     if (!amHost(g) || (g.phase !== 'play' && g.phase !== 'over')) return;
     refreshBots(g);
+    if (botIds.size === 0) return; // a full table of people: no bots to move or publish
     const map = mapOf(g.map);
     if (!bw) bw = createBotWorld(Math.random);
     if (bwRid !== g.rid) {

@@ -141,7 +141,7 @@ function drawIcon(cx) {
   cx.fillStyle = g;
   cx.fillRect(0, 0, 512, 512);
   // a few stars of confetti in the corners of the picture, kept away from the edge
-  for (const [x, y, r, c] of [[110, 130, 16, '#ffd21f'], [405, 150, 13, '#ffffff'], [90, 330, 12, '#ffffff'], [420, 340, 17, '#ffd21f']]) iconStar(cx, x, y, r, c);
+  for (const s of [{ x: 110, y: 130, r: 16, c: '#ffd21f' }, { x: 405, y: 150, r: 13, c: '#ffffff' }, { x: 90, y: 330, r: 12, c: '#ffffff' }, { x: 420, y: 340, r: 17, c: '#ffd21f' }]) iconStar(cx, s.x, s.y, s.r, s.c);
   const s = 96;
   const v = { ox: 256, oy: 448, s, lw: 5, W: 512, H: 512 };
   const f = fig('i', { x: 0, y: 0, hold: true, cheer: 1, c: 6, name: '', sx: 1, sy: 1 });

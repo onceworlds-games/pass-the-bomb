@@ -446,3 +446,20 @@ test('on a phone the platform stick moves you and its Dash button dashes; the co
   assert.ok(log.slice(beforeMatch).includes(null), 'the controls are cleared on the results screen');
   assert.ok(log.slice(beforeMatch).some((o) => o && o.buttons.length === 1), 'and asked for during play');
 });
+
+test('a full table of eight people has no bots, and the match still runs to the podium', () => {
+  const server = new Server({ latency: 50 });
+  const pages = Array.from({ length: 8 }, (_, i) => boot(server, 'h' + (i + 1), 'Player' + (i + 1), 20 + i));
+  frames(30);
+  for (const p of pages) leaveTitle(p);
+  frames(30);
+  pages[0].room.startMatch();
+  frames(60 * 4);
+  runUntilLobby(pages, { limit: 60 * 600 });
+  const g = server.state.g;
+  assert.equal(g.roster.length, 8);
+  assert.ok(g.roster.every((r) => !r.b), 'no bots');
+  assert.equal(server.state.b, undefined, 'nothing published for bots');
+  assert.equal(g.phase, 'final');
+  assert.ok(Object.values(g.st).reduce((s, x) => s + x.p, 0) >= 3, 'people passed the bomb');
+});
