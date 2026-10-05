@@ -100,6 +100,7 @@ export function stepBots(bw, g, map, dt, now, others) {
     a.tag = !a.hold && !a.imm && !a.away;
     agents[n++] = a;
   }
+  agents.length = n;
   for (let i = 0; i < n; i++) {
     const a = agents[i];
     if (!a.bot) continue;
