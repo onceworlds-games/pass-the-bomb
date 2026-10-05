@@ -55,7 +55,8 @@ export async function runPoster(name, canvas) {
 }
 
 function drawCover(cx) {
-  const v = makeView(1280, 720, 1, { top: 64, bottom: 8 });
+  // closer than the whole arena: the runners and the bomb read at card size
+  const v = { W: 1280, H: 720, pr: 1, s: 60, ox: 640 - 12.6 * 60, oy: 440 - 8.6 * 60, top: 0, lw: 4.5 };
   const map = mapOf('backyard');
   const fx = createFx(rng(11));
   fx.setQuality('high', false);
@@ -81,14 +82,14 @@ function drawCover(cx) {
   drawWorld(cx, v, map, { figs, bombs, fx }, T);
   // the name, big and chunky in the top third
   cx.save();
-  cx.translate(640, 62);
+  cx.translate(640, 96);
   cx.rotate(-0.03);
-  cx.font = `124px ${FONT}`;
+  cx.font = `112px ${FONT}`;
   const w1 = cx.measureText('PASS THE ').width;
   const w2 = cx.measureText('BOMB').width;
   const x0 = -(w1 + w2) / 2;
-  text(cx, 'PASS THE ', x0, 0, 124, { align: 'left', width: 24 });
-  text(cx, 'BOMB', x0 + w1, 0, 124, { align: 'left', fill: '#ff5a2a', width: 24 });
+  text(cx, 'PASS THE ', x0, 0, 112, { align: 'left', width: 22 });
+  text(cx, 'BOMB', x0 + w1, 0, 112, { align: 'left', fill: '#ff5a2a', width: 22 });
   cx.restore();
 }
 
