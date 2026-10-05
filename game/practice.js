@@ -8,11 +8,11 @@ import { newPractice, pass, bombOf } from './engine.js';
 import { createBotWorld, placeBots, stepBots } from './botworld.js';
 
 /** `withMe`: the player is in it (id 'me'), driven by the page. Otherwise only bots, running about for the title. */
-export function createPractice(seed, mapId, nBots, withMe) {
+export function createPractice(seed, mapId, nBots, withMe, meId = 'me') {
   const rand = rng(hash32('practice' + seed) ^ 0x51ed270b);
   const map = mapOf(mapId);
   const roster = [];
-  if (withMe) roster.push({ id: 'me', n: 'You', b: 0, c: colorOfId('me') });
+  if (withMe) roster.push({ id: meId, n: 'You', b: 0, c: colorOfId(meId) });
   for (let i = 1; i <= nBots; i++) roster.push({ id: 'p' + i, n: BOT_NAMES[(i - 1 + (seed % 5)) % BOT_NAMES.length], b: 1, c: 0 });
   // distinct colors for the bots
   const used = new Set(roster.map((r) => r.c));
@@ -28,7 +28,7 @@ export function createPractice(seed, mapId, nBots, withMe) {
   g.rid = 'practice' + seed;
   const bw = createBotWorld(rand);
   placeBots(bw, g, map);
-  return { rand, map, g, bw, now: 0, withMe, passN: 0, lastFrom: '', lastTo: '', others: [{ id: 'me', x: 0, y: 0, vx: 0, vy: 0, dash: false, away: false }] };
+  return { rand, map, g, bw, now: 0, withMe, meId, passN: 0, lastFrom: '', lastTo: '', others: [{ id: meId, x: 0, y: 0, vx: 0, vy: 0, dash: false, away: false }] };
 }
 
 /**
@@ -54,7 +54,7 @@ export function stepPractice(p, dt, me) {
   }
   // the player tagging a bot
   if (me && p.withMe) {
-    const b = bombOf(p.g, 'me');
+    const b = bombOf(p.g, p.meId);
     if (b && b.a <= p.now) {
       let best = null;
       let bd = TAG_DIST * TAG_DIST;
@@ -68,7 +68,7 @@ export function stepPractice(p, dt, me) {
           best = a;
         }
       }
-      if (best && pass(p.g, b.k, best.id, p.now, null)) note(p, 'me', best.id);
+      if (best && pass(p.g, b.k, best.id, p.now, null)) note(p, p.meId, best.id);
     }
   }
 }
