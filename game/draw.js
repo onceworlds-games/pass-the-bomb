@@ -1071,10 +1071,10 @@ export function drawFigure(ctx, v, f, t) {
 
 /** The name under a figure's feet. */
 export function drawTag(ctx, v, f) {
-  if (!f.name || f.alpha <= 0.05) return;
+  if (!f.name || f.alpha <= 0.05 || f.fly >= 0) return;
   const size = clamp(v.s * 0.52, 11, 19);
   const gx = v.ox + f.x * v.s;
-  const gy = v.oy + (f.y - (f.fly >= 0 ? f.z : 0)) * v.s + 0.72 * v.s + size * 0.5;
+  const gy = v.oy + f.y * v.s + 0.72 * v.s + size * 0.5;
   ctx.globalAlpha = (f.ghost ? 0.6 : 1) * Math.min(1, f.alpha);
   text(ctx, f.name, gx, gy, size, { fill: f.me ? '#ffe066' : '#ffffff', width: size * 0.26 });
   if (f.away) text(ctx, 'Zz', gx + v.s * 0.8, gy - v.s * 1.6, size * 0.9, { fill: '#cfe8ff' });

@@ -99,37 +99,32 @@ const hits = [];
 export function drawLobbyTop(ctx, v, s) {
   hits.length = 0;
   const chipH = Math.max(44, Math.min(54, v.H * 0.1));
-  const fs = clamp(chipH * 0.42, 15, 24);
   const gap = 8;
-  const left = Math.max(140, 8);
-  const room = v.W - 8 - left;
-  ctx.font = `${fs}px ${FONT}`;
-  const roundsLabelW = ctx.measureText('Rounds').width;
   const rounds = s.canEdit ? ROUND_OPTIONS : [s.rounds];
   const maps = s.canEdit ? MAP_IDS : [s.map];
-  const roundsW = roundsLabelW + 14 + rounds.length * (Math.max(44, fs * 1.9) + gap);
-  const mapWs = maps.map((m) => ctx.measureText(MAPS[m].name).width + fs * 2.4 + 12);
-  const mapsW = mapWs.reduce((a, b) => a + b + gap, 0);
-  const oneRow = roundsW + 18 + mapsW <= room;
-  const rows = oneRow ? [[0, 1]] : [[0], [1]];
+  // Find the biggest text that lets the rows fit: the first row keeps clear of the platform's buttons at the top left.
+  let fs = clamp(chipH * 0.42, 15, 24);
+  let L;
+  for (;;) {
+    L = lobbyLayout(ctx, v, fs, rounds, maps, gap);
+    if (L.fits || fs <= 13) break;
+    fs -= 1;
+  }
   let y = 8;
-  for (const row of rows) {
-    let rw = 0;
-    for (const g of row) rw += (g === 0 ? roundsW : mapsW) + (rw ? 18 : 0);
-    let x = clamp((v.W - rw) / 2, left, Math.max(left, v.W - 8 - rw));
-    for (const g of row) {
+  for (const row of L.rows) {
+    let x = row.x;
+    for (const g of row.groups) {
       if (g === 0) {
         text(ctx, 'Rounds', x, y + chipH / 2, fs, { align: 'left', width: fs * 0.24 });
-        x += roundsLabelW + 14;
+        x += L.labelW + 14;
         for (const r of rounds) {
-          const w = Math.max(44, fs * 1.9);
-          chip(ctx, x, y, w, chipH, String(r), r === s.rounds, fs, null);
-          if (s.canEdit) hits.push({ x, y, w, h: chipH, id: 'rounds', value: r });
-          x += w + gap;
+          chip(ctx, x, y, L.chipW, chipH, String(r), r === s.rounds, fs, null);
+          if (s.canEdit) hits.push({ x, y, w: L.chipW, h: chipH, id: 'rounds', value: r });
+          x += L.chipW + gap;
         }
       } else {
         maps.forEach((m, i) => {
-          const w = mapWs[i];
+          const w = L.mapWs[i];
           chip(ctx, x, y, w, chipH, MAPS[m].name, m === s.map, fs, MAPS[m].pal.ground);
           if (s.canEdit) hits.push({ x, y, w, h: chipH, id: 'map', value: m });
           x += w + gap;
@@ -140,6 +135,22 @@ export function drawLobbyTop(ctx, v, s) {
     y += chipH + 6;
   }
   return hits;
+}
+
+function lobbyLayout(ctx, v, fs, rounds, maps, gap) {
+  ctx.font = `${fs}px ${FONT}`;
+  const labelW = ctx.measureText('Rounds').width;
+  const chipW = Math.max(44, fs * 1.9);
+  const roundsW = labelW + 14 + rounds.length * (chipW + gap);
+  const mapWs = maps.map((m) => ctx.measureText(MAPS[m].name).width + fs * 2.4 + 12);
+  const mapsW = mapWs.reduce((a, b) => a + b + gap, 0);
+  const left = 140; // the platform's buttons sit in the top-left corner
+  const place = (w, minX) => clamp((v.W - w) / 2, minX, Math.max(minX, v.W - 8 - w));
+  const both = roundsW + 18 + mapsW;
+  if (both <= v.W - 8 - left) return { fits: true, labelW, chipW, mapWs, rows: [{ x: place(both, left), groups: [0, 1] }] };
+  // two rows: the first still keeps clear of the corner, the second may use the whole width
+  const fits = roundsW <= v.W - 8 - left && mapsW - gap <= v.W - 16;
+  return { fits, labelW, chipW, mapWs, rows: [{ x: place(roundsW, left), groups: [0] }, { x: place(mapsW, 8), groups: [1] }] };
 }
 
 function chip(ctx, x, y, w, h, label, on, fs, dot) {
@@ -180,9 +191,9 @@ const COUNT_COLORS = { 3: '#ff4b4b', 2: '#ff8a1f', 1: '#ffd21f', GO: '#2fd05a' }
 
 /** The big 3, 2, 1, GO!. `k` is how far into this number we are (0..1). */
 export function drawCountdown(ctx, v, label, k) {
-  const base = Math.min(v.W, v.H) * 0.5;
+  const base = Math.min(v.W, v.H) * 0.42;
   const pop = label === 'GO' ? 0.8 : 1;
-  const sc = 1 + (1 - easeOutCubic(clamp(k * 3, 0, 1))) * 0.7;
+  const sc = 1 + (1 - easeOutCubic(clamp(k * 3, 0, 1))) * 0.45;
   ctx.save();
   ctx.globalAlpha = k > 0.8 ? clamp((1 - k) * 5, 0, 1) : 1;
   ctx.translate(v.W / 2, v.H * 0.46);
@@ -217,11 +228,12 @@ export function drawHud(ctx, v, h) {
   const cy = v.top * 0.5 + 1;
   const ph = fs * 1.75;
   ctx.font = `${fs}px ${FONT}`;
-  const label = `ROUND ${h.round}/${h.rounds}`;
+  const compact = v.W < 560;
+  const label = compact ? `${h.round}/${h.rounds}` : `ROUND ${h.round}/${h.rounds}`;
   const lw = ctx.measureText(label).width;
   const nw = ctx.measureText(String(h.alive)).width;
   const w = lw + nw + fs * 3.6;
-  const x = (v.W - w) / 2;
+  const x = Math.max(136, (v.W - w) / 2); // never over the platform's buttons
   pill(ctx, x, cy - ph / 2, w, ph, 'rgba(27,21,48,0.7)');
   text(ctx, label, x + fs * 0.9, cy + 1, fs, { align: 'left', width: fs * 0.2 });
   iconPerson(ctx, x + fs * 0.9 + lw + fs * 0.95, cy, fs * 0.62);
@@ -283,7 +295,7 @@ export function drawWinner(ctx, v, label, f, age) {
   const k = clamp(age / 300, 0, 1);
   const size = fitSize(ctx, label, clamp(v.H * 0.13, 30, 96), v.W * 0.86);
   ctx.save();
-  ctx.translate(v.W / 2, v.H * 0.2);
+  ctx.translate(v.W / 2, Math.max(v.H * 0.24, 80));
   const sc = Math.max(0.01, easeOutBack(k));
   ctx.scale(sc, sc);
   iconCrown(ctx, 0, -size * 0.95, size * 0.42);
@@ -320,12 +332,12 @@ export function drawScoreboard(ctx, v, rows, t, round, rounds) {
     if (slide <= 0) continue;
     ctx.save();
     ctx.globalAlpha = slide;
-    ctx.translate((1 - slide) * -60, 0);
+    ctx.translate((1 - slide) * -24, 0);
     pill(ctx, x, y + 2, colW, rh - 4, r.me ? 'rgba(255,224,102,0.9)' : 'rgba(255,255,255,0.88)');
     const cy = y + rh / 2;
     text(ctx, String(i + 1), x + rh * 0.55, cy + 1, rh * 0.5, { fill: r.me ? '#1b1530' : '#4a4468', width: 0 });
     drawHead(ctx, x + rh * 1.3, cy + rh * 0.05, rh * 0.31, r.f, 2.5, t);
-    const nameW = colW - rh * 3.4 - rh * 1.8;
+    const nameW = colW - rh * 4 - 4;
     const ns = fitSize(ctx, r.name, rh * 0.5, Math.max(40, nameW));
     text(ctx, r.name, x + rh * 1.9, cy + 1, ns, { align: 'left', fill: '#1b1530', width: 0 });
     // the points fly in from the left of the score
@@ -408,10 +420,11 @@ export function drawPodium(ctx, v, p, t) {
     rr(ctx, x - bw / 2 + 6, top + 6, bw - 12, Math.max(0, bh * 0.16), 6);
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fill();
-    text(ctx, String(i + 1), x, top + bh * 0.42, Math.min(bh * 0.5, bw * 0.5), { fill: '#ffffff' });
-    if (bh > 40) {
-      iconStar(ctx, x - bw * 0.2, top + bh * 0.82, Math.min(14, bh * 0.1));
-      text(ctx, String(e.score), x + bw * 0.04, top + bh * 0.82 + 1, Math.min(bh * 0.2, 26), { fill: '#1b1530', width: 0 });
+    text(ctx, String(i + 1), x, top + bh * 0.36, Math.min(bh * 0.46, bw * 0.5), { fill: '#ffffff' });
+    if (bh > 40 && e.score !== '') {
+      const ss = clamp(bh * 0.22, 14, 28);
+      iconStar(ctx, x - bw * 0.2, top + bh * 0.79, ss * 0.5);
+      text(ctx, String(e.score), x + bw * 0.04, top + bh * 0.79 + 1, ss, { fill: '#1b1530', width: 0 });
     }
     // the figure
     if (t > starts[i] + 0.25) {
@@ -441,21 +454,35 @@ export function drawPodium(ctx, v, p, t) {
     const items = [];
     if (p.awards.potato) items.push({ icon: 'flame', label: 'Hot Potato', name: p.awards.potato.name, extra: String(p.awards.potato.n) });
     if (p.awards.slippery) items.push({ icon: 'bomb', label: 'Slippery', name: p.awards.slippery.name, extra: '' });
-    const fs = clamp(v.H * 0.04, 12, 20);
-    ctx.font = `${fs}px ${FONT}`;
-    const ws = items.map((it) => ctx.measureText(`${it.label}  ${it.name}${it.extra ? '  ' + it.extra : ''}`).width + fs * 3);
+    let fs = clamp(v.H * 0.04, 12, 20);
+    const str = (it) => `${it.label}  ${it.name}${it.extra ? '  ' + it.extra : ''}`;
+    const widths = () => items.map((it) => ctx.measureText(str(it)).width + fs * 3);
+    let ws;
+    for (;;) {
+      ctx.font = `${fs}px ${FONT}`;
+      ws = widths();
+      if (Math.max(0, ...ws) <= v.W - 16 || fs <= 11) break;
+      fs -= 1;
+    }
     const total = ws.reduce((a, b) => a + b + 12, -12);
+    const stack = total > v.W - 16; // two chips that don't fit side by side go one above the other
+    const rowH = fs * 2 + 6;
+    let y = Math.min(v.H - (stack ? rowH * items.length : rowH) - 4, baseY + clamp(v.H * 0.06, 20, 40));
     let x = (v.W - total) / 2;
-    const y = Math.min(v.H - fs * 2.2 - 8, baseY + clamp(v.H * 0.06, 20, 40));
     items.forEach((it, i) => {
+      if (stack) {
+        x = (v.W - ws[i]) / 2;
+        y = Math.min(v.H - rowH * (items.length - i) - 4, y);
+      }
       const a = easeOutCubic(clamp((t - 1.8 - i * 0.25) / 0.3, 0, 1));
       ctx.globalAlpha = a;
       pill(ctx, x, y, ws[i], fs * 2, 'rgba(255,255,255,0.92)');
       if (it.icon === 'flame') iconFlame(ctx, x + fs * 1.1, y + fs, fs * 0.7);
       else iconBombSmall(ctx, x + fs * 1.1, y + fs, fs * 0.65);
-      text(ctx, `${it.label}  ${it.name}${it.extra ? '  ' + it.extra : ''}`, x + fs * 2.1, y + fs + 1, fs, { align: 'left', fill: '#1b1530', width: 0 });
+      text(ctx, str(it), x + fs * 2.1, y + fs + 1, fs, { align: 'left', fill: '#1b1530', width: 0 });
       ctx.globalAlpha = 1;
-      x += ws[i] + 12;
+      if (stack) y += rowH;
+      else x += ws[i] + 12;
     });
   }
 }

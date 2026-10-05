@@ -91,6 +91,13 @@ export function frame(ms = 1000 / 60) {
   for (const cb of cbs) cb(clock.T);
 }
 
+/** Forget every page, timer and frame callback from earlier tests. */
+export function resetWorld() {
+  timers.length = 0;
+  rafQ.length = 0;
+  globalThis.__handlers?.clear();
+}
+
 export function frames(n) {
   for (let i = 0; i < n; i++) frame();
 }
@@ -98,7 +105,7 @@ export function frames(n) {
 // ---------------------------------------------------------------- the canvas
 
 const fnCache = new Map();
-export const drawStats = { calls: 0, text: [] };
+export const drawStats = { calls: 0, text: [], boxes: [], record: false };
 
 function check(name, args) {
   drawStats.calls++;
@@ -113,9 +120,40 @@ function check(name, args) {
   if (name === 'fillText' || name === 'strokeText') drawStats.text.push(String(args[0]));
 }
 
+function noteBox(state, args, m, scale) {
+  const size = parseFloat(state.font) || 10;
+  const w = String(args[0]).length * size * 0.55;
+  const align = state.textAlign || 'start';
+  const x0 = align === 'center' ? args[1] - w / 2 : align === 'right' || align === 'end' ? args[1] - w : args[1];
+  const base = state.textBaseline || 'alphabetic';
+  // the capital letters fill about 0.72 of the font size
+  const cap = size * 0.72;
+  const y0 = base === 'middle' ? args[2] - cap / 2 : base === 'top' ? args[2] : args[2] - cap;
+  // through the current transform, back to CSS pixels
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [px, py] of [[x0, y0], [x0 + w, y0], [x0, y0 + cap], [x0 + w, y0 + cap]]) {
+    const X = (m[0] * px + m[2] * py + m[4]) / scale;
+    const Y = (m[1] * px + m[3] * py + m[5]) / scale;
+    minX = Math.min(minX, X);
+    maxX = Math.max(maxX, X);
+    minY = Math.min(minY, Y);
+    maxY = Math.max(maxY, Y);
+  }
+  drawStats.boxes.push({ s: String(args[0]), x0: minX, x1: maxX, y0: minY, y1: maxY, alpha: state.globalAlpha, h: size * Math.hypot(m[2], m[3]) / scale });
+}
+
+const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+
 export function fakeCtx() {
   const state = { font: '10px sans-serif', globalAlpha: 1, lineWidth: 1 };
   let depth = 0;
+  let m = [1, 0, 0, 1, 0, 0];
+  let scale = 1;
+  const stack = [];
+  const alphaStack = [];
   return new Proxy(
     {},
     {
@@ -129,11 +167,40 @@ export function fakeCtx() {
             return { addColorStop() {} };
           };
         }
-        if (p === 'save') return () => void depth++;
+        if (p === 'save') return () => {
+          depth++;
+          stack.push(m);
+          alphaStack.push(state.globalAlpha);
+        };
         if (p === 'restore') return () => {
           depth--;
           if (depth < 0) throw new Error('canvas restore without save');
+          m = stack.pop();
+          state.globalAlpha = alphaStack.pop();
         };
+        if (p === 'setTransform') return (...a) => {
+          check(p, a);
+          m = a.slice();
+          scale = a[0] || 1;
+        };
+        if (p === 'translate') return (x, y) => {
+          check(p, [x, y]);
+          m = mul(m, [1, 0, 0, 1, x, y]);
+        };
+        if (p === 'scale') return (x, y) => {
+          check(p, [x, y]);
+          m = mul(m, [x, 0, 0, y, 0, 0]);
+        };
+        if (p === 'rotate') return (a) => {
+          check(p, [a]);
+          m = mul(m, [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]);
+        };
+        if (p === 'fillText') {
+          return (...a) => {
+            check(p, a);
+            if (drawStats.record && state.globalAlpha > 0.2 && String(a[0]).trim()) noteBox(state, a, m, scale);
+          };
+        }
         let f = fnCache.get(p);
         if (!f) {
           f = (...a) => check(p, a);

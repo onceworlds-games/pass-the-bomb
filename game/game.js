@@ -32,7 +32,9 @@ export function startGame({ ow, room, standalone, canvas }) {
 
   // ---------------------------------------------------------------- state
   let pr = 1;
-  let view = makeView(innerWidth, innerHeight, 1);
+  let viewFull = makeView(innerWidth, innerHeight, 1);
+  let viewLobby = viewFull; // the lobby keeps the bottom clear for the platform's Ready strip
+  let view = viewFull;
   let bgCanvas = null;
   let bgKey = '';
   let frameNo = 0;
@@ -124,7 +126,9 @@ export function startGame({ ow, room, standalone, canvas }) {
     pr = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
     canvas.width = Math.max(1, Math.round(w * pr));
     canvas.height = Math.max(1, Math.round(h * pr));
-    view = makeView(w, h, pr);
+    viewFull = makeView(w, h, pr);
+    viewLobby = makeView(w, h, pr, { bottom: 88 });
+    view = scene === 'lobby' ? viewLobby : viewFull;
     bgKey = '';
   }
   applyQuality();
@@ -140,7 +144,7 @@ export function startGame({ ow, room, standalone, canvas }) {
   }
 
   function ensureBackground(map) {
-    const key = `${view.W}x${view.H}x${pr}:${map.id}`;
+    const key = `${view.W}x${view.H}x${pr}:${map.id}:${Math.round(view.oy)}:${Math.round(view.s * 10)}`;
     if (key === bgKey && bgCanvas) return bgCanvas;
     bgKey = key;
     bgCanvas = document.createElement('canvas');
@@ -1022,6 +1026,7 @@ export function startGame({ ow, room, standalone, canvas }) {
   const sceneObj = { figs: list, bombs, fx };
 
   function render(t) {
+    view = scene === 'lobby' ? viewLobby : viewFull;
     cx.setTransform(pr, 0, 0, pr, 0, 0);
     const g = curG;
     const mapId = scene === 'title' ? 'backyard' : scene === 'play' && g ? g.map : String(room.settings.map);
