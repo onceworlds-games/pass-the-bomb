@@ -77,7 +77,7 @@ function drawCover(cx) {
   for (const f of figs.slice(1)) fx.dust(f.x - 0.5, f.y, -1.5, 0);
   fx.sparks(holder.x + 0.5, holder.y, 3.1, 8, '#ffd21f', 1);
   for (let i = 0; i < 3; i++) fx.update(0.05);
-  const bombs = [{ x: holder.x, y: holder.y, z: 2.4, scale: 1.12, flash: 0.1, fuse: 0.4, fall: -1 }];
+  const bombs = [{ x: holder.x, y: holder.y, z: 2.6, scale: 1.12, flash: 0.1, fuse: 0.4, fall: -1 }];
   drawWorld(cx, v, map, { figs, bombs, fx }, T);
   // the name, big and chunky in the top third
   cx.save();
@@ -142,11 +142,11 @@ function drawIcon(cx) {
   cx.fillRect(0, 0, 512, 512);
   // a few stars of confetti in the corners of the picture, kept away from the edge
   for (const [x, y, r, c] of [[110, 130, 16, '#ffd21f'], [405, 150, 13, '#ffffff'], [90, 330, 12, '#ffffff'], [420, 340, 17, '#ffd21f']]) iconStar(cx, x, y, r, c);
-  const s = 104;
+  const s = 96;
   const v = { ox: 256, oy: 448, s, lw: 5, W: 512, H: 512 };
   const f = fig('i', { x: 0, y: 0, hold: true, cheer: 1, c: 6, name: '', sx: 1, sy: 1 });
   drawFigure(cx, v, f, T);
-  drawBomb(cx, v, { x: 0, y: 0, z: 2.4, scale: 1.15, flash: 0, fuse: 0.55, fall: -1 }, T);
+  drawBomb(cx, v, { x: 0, y: 0, z: 2.65, scale: 1.15, flash: 0, fuse: 0.55, fall: -1 }, T);
 }
 
 function drawBadge(cx, b) {

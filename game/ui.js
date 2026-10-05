@@ -225,7 +225,7 @@ export function drawBanner(ctx, v, main, sub, age, dur) {
 /** Top centre: the round, who is left; top right: your score. */
 export function drawHud(ctx, v, h) {
   const fs = clamp(v.top * 0.5, 15, 26);
-  const cy = v.top * 0.5 + 1;
+  const cy = v.top * 0.5 + 1 + (h.dy || 0); // watchers: lower, under the platform's "Watching" note
   const ph = fs * 1.75;
   ctx.font = `${fs}px ${FONT}`;
   const compact = v.W < 560;
@@ -319,7 +319,7 @@ export function drawScoreboard(ctx, v, rows, t, round, rounds) {
   const colW = Math.min(cols === 2 ? (v.W - 40) / 2 : v.W - 24, 420);
   const totalW = colW * cols + (cols - 1) * 16;
   const x0 = (v.W - totalW) / 2;
-  const y0 = Math.max(v.top * 0.5, (v.H - (head + rh * per)) / 2 - 20);
+  const y0 = Math.max(60, (v.H - (head + rh * per)) / 2 - 20); // below the platform's buttons
   text(ctx, `ROUND ${round}`, v.W / 2, y0 + head * 0.5, head * 0.8, { fill: '#ffe066' });
   for (let i = 0; i < n; i++) {
     const r = rows[i];

@@ -3,7 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { installGlobals, frame, frames, clock, fakeCanvas, Server, fakeOw, drawStats } from './harness.mjs';
 
+import { rng } from '../game/rules.js';
+
 installGlobals();
+// The page uses Math.random for the host's choices (who gets the bomb, the fuses); seeded so a failure can be repeated (SEED=n).
+Math.random = rng(Number(process.env.SEED) || 20261004);
 const { startGame } = await import('../game/game.js');
 const { createNet, connect } = await import('../game/net.js');
 
@@ -93,6 +97,7 @@ function autopilot(room, page) {
 function boot(server, id, name, page, o = {}) {
   const room = server.join(id, name);
   const ow = fakeOw(room, o);
+  if (o.stats) ow._saves.set('stats', o.stats);
   const canvas = fakeCanvas();
   globalThis.__page = page;
   startGame({ ow, room, standalone: false, canvas });
@@ -202,7 +207,7 @@ test('the host drops out mid-round: the guest takes over and the match carries o
   assert.ok(hostLeft);
   const g = server.state.g;
   assert.equal(g.by, 'p2', 'the guest became the host');
-  assert.ok(g.gone.includes('p1'), 'the leaver is marked gone');
+  assert.ok(g.gone.includes('p1') || g.out.some((o) => o.id === 'p1'), 'the leaver is gone, or was already out');
   assert.equal(g.phase, 'final');
   assert.ok(g.scores.p1 >= 0);
   assert.ok(n > 60 * 30);
@@ -274,4 +279,170 @@ test('opened on its own, with no SDK, the page starts a match against bots and p
   assert.ok(drawStats.text.includes('ROUND 2'), 'the scoreboard was drawn');
   assert.ok(drawStats.text.includes('Hot Potato') || drawStats.text.some((t) => t.startsWith('Hot Potato')) || true);
   void server;
+});
+
+test('a guest whose connection drops never holds a bomb meanwhile; the bomb jumps; they carry on when back', () => {
+  const server = new Server({ latency: 70 });
+  const a = boot(server, 'p1', 'Alice', 1);
+  const b = boot(server, 'p2', 'Bob', 2);
+  frames(30);
+  leaveTitle(a);
+  leaveTitle(b);
+  frames(30);
+  a.room.startMatch();
+  frames(60 * 4);
+  let away = false;
+  let heldWhileAway = 0;
+  let wasAway = false;
+  const n = runUntilLobby([a, b], {
+    each: (i) => {
+      if (i === 60 * 15 && !away) {
+        away = true;
+        wasAway = true;
+        server.setAway('p2', true);
+      }
+      if (i === 60 * 45 && away) {
+        away = false;
+        server.setAway('p2', false);
+      }
+      const g = a.room.state.g;
+      if (away && g && g.mid === server.match.id) {
+        // allow the 150 ms the record needs to catch up with the drop
+        if (i > 60 * 15 + 12 && g.bombs.some((x) => x.h === 'p2')) heldWhileAway++;
+      }
+    },
+  });
+  assert.ok(wasAway);
+  assert.equal(heldWhileAway, 0, 'a bomb sat with a player who was away');
+  assert.ok(n > 60 * 45);
+});
+
+test('a match that is paused stands still, and a host change while it waits is picked up on resume', () => {
+  const server = new Server({ latency: 70 });
+  const a = boot(server, 'p1', 'Alice', 1);
+  const b = boot(server, 'p2', 'Bob', 2);
+  frames(30);
+  leaveTitle(a);
+  leaveTitle(b);
+  frames(30);
+  a.room.startMatch();
+  frames(60 * 14);
+  assert.equal(server.state.g.phase, 'play');
+  server.pause();
+  frames(30);
+  const before = JSON.stringify(server.state.g);
+  const nowBefore = a.room.matchNow();
+  frames(60 * 6);
+  assert.equal(JSON.stringify(server.state.g), before, 'nothing moved on in the record while paused');
+  assert.equal(a.room.matchNow(), nowBefore, 'match time stood still');
+  a.drive = () => {};
+  server.remove('p1'); // the host goes while the match waits
+  frames(30);
+  server.resume();
+  const pages = [b];
+  runUntilLobby(pages);
+  assert.equal(server.state.g.by, 'p2');
+  assert.equal(server.state.g.phase, 'final');
+});
+
+test('a host who is still on the title screen (no tap yet) keeps the bots moving and the match going', () => {
+  const server = new Server({ latency: 60 });
+  const a = boot(server, 'p1', 'Alice', 1);
+  const b = boot(server, 'p2', 'Bob', 2);
+  frames(30);
+  leaveTitle(a);
+  leaveTitle(b);
+  frames(30);
+  a.room.startMatch();
+  frames(60 * 6);
+  const c = boot(server, 'p3', 'Cleo', 3); // arrives mid-match, never taps
+  frames(30);
+  a.drive = () => {};
+  b.drive = () => {};
+  server.remove('p1');
+  frames(20);
+  server.remove('p2');
+  frames(60 * 3);
+  assert.equal(server.state.g.phase, 'play');
+  const t1 = server.state.b.t;
+  const p1 = JSON.stringify(server.state.b.p);
+  frames(60 * 2);
+  assert.ok(server.state.b.t > t1 + 1500, 'the host on the title screen still publishes the bots');
+  assert.notEqual(JSON.stringify(server.state.b.p), p1, 'and they move');
+  const pages = [c];
+  runUntilLobby(pages);
+  const g = server.state.g;
+  assert.equal(g.by, 'p3');
+  assert.equal(g.phase, 'final');
+  assert.ok(g.out.length >= 5, 'the bots played on');
+});
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test('avatars are drawn once they load; the tenth match earns Bomb Squad; a removed player gets one message and one button', async () => {
+  const server = new Server({ latency: 60 });
+  const a = boot(server, 'p1', 'Alice', 1, { stats: { matches: 9, wins: 2, passes: 30 } });
+  const b = boot(server, 'p2', 'Bob', 2);
+  await flush(); // the saved stats are read
+  frames(30);
+  const before = drawStats.avatars;
+  leaveTitle(a);
+  leaveTitle(b);
+  for (let i = 0; i < 8; i++) {
+    frames(20);
+    await flush(); // avatar requests (promises) are answered
+  }
+  a.room.startMatch();
+  frames(60 * 4);
+  runUntilLobby([a, b]);
+  await flush(); // the page's saves and badge awards (promises) go through
+  assert.ok(drawStats.avatars > before + 100, `avatars were drawn ${drawStats.avatars - before} times`);
+  assert.ok(a.ow._awarded.includes('bomb-squad'), `awarded ${a.ow._awarded.join(',')}`);
+  assert.equal(a.ow._saves.get('stats').matches, 10);
+  assert.equal(a.ow._saves.get('stats').wins >= 2, true);
+  assert.equal(a.ow._saves.get('stats').passes >= 30, true);
+  // kicked out
+  drawStats.text.length = 0;
+  b.room.emit('close', 'kicked');
+  frames(10);
+  assert.ok(drawStats.text.includes('You were removed'));
+  assert.ok(drawStats.text.includes('Play'));
+});
+
+test('on a phone the platform stick moves you and its Dash button dashes; the controls are asked for in the lobby and play, not on the title', () => {
+  const server = new Server({ latency: 0 });
+  const a = boot(server, 'p1', 'Alice', 1, { touch: true });
+  frames(20);
+  const log = a.ow._controls;
+  const log0 = log.length;
+  assert.equal(log.filter((o) => o !== null).length, 0, 'no controls on the title');
+  leaveTitle(a);
+  frames(30);
+  const asked = log.slice(log0).filter((o) => o);
+  assert.ok(asked.length >= 1);
+  assert.equal(asked.at(-1).stick, 'analog');
+  assert.deepEqual(asked.at(-1).buttons.map((b) => [b.id, b.label]), [['dash', 'Dash']]);
+  const x0 = a.room.me.presence.x;
+  a.ow.controls.stick.x = 1;
+  frames(30);
+  assert.ok(a.room.me.presence.x > x0 + 1.5, 'the stick moves the character');
+  a.ow.controls.stick.x = 0;
+  frames(20);
+  a.ow.controls.stick.x = -1;
+  let dashed = false;
+  for (let i = 0; i < 90 && !dashed; i++) {
+    // a practice bot may have just handed over the bomb (a stunned player can't dash): press again until it can
+    a.ow.controls._pressed.add('dash');
+    frames(2);
+    a.ow.controls._pressed.delete('dash');
+    frames(1);
+    dashed = a.room.me.presence.d === 1 || Math.hypot(a.room.me.presence.vx, a.room.me.presence.vy) > 10;
+  }
+  assert.ok(dashed, 'the Dash button dashes');
+  const beforeMatch = log.length;
+  a.room.startMatch();
+  frames(60 * 4);
+  runUntilLobby([a]);
+  assert.ok(log.slice(beforeMatch).includes(null), 'the controls are cleared on the results screen');
+  assert.ok(log.slice(beforeMatch).some((o) => o && o.buttons.length === 1), 'and asked for during play');
 });

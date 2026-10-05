@@ -13,9 +13,9 @@ async function main() {
     return;
   }
   try {
-    document.fonts.load('40px "Luckiest Guy"');
+    Promise.resolve(document.fonts.load('40px "Luckiest Guy"')).catch(() => {}); // the fallback font draws until it arrives
   } catch {
-    // the fallback font draws until it arrives
+    // no font loading API
   }
   const conn = await connect();
   startGame({ ow: conn.ow, room: conn.room, standalone: conn.standalone, canvas });

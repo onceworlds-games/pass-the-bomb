@@ -1207,7 +1207,7 @@ export function drawWorld(ctx, v, map, scene, t) {
     drawObstacle(ctx, v, o, t);
   }
   while (fi < figs.length) drawFigure(ctx, v, figs[fi++], t);
-  for (let i = 0; i < obs.length; i++) if (hasOverhead(obs[i])) drawOverhead(ctx, v, obs[i], 0.66);
+  for (let i = 0; i < obs.length; i++) if (hasOverhead(obs[i])) drawOverhead(ctx, v, obs[i], 0.55);
   if (scene.fx) scene.fx.draw(ctx, v);
   for (let i = 0; i < scene.bombs.length; i++) drawBomb(ctx, v, scene.bombs[i], t);
   for (let i = 0; i < figs.length; i++) {

@@ -15,7 +15,7 @@ export const SETTINGS = [
   { id: 'map', label: 'Map', options: [{ value: 'backyard', label: 'Backyard' }, { value: 'beach', label: 'Beach' }, { value: 'playground', label: 'Playground' }], default: 'backyard' },
 ];
 
-const MAX_TAG_LAG = 4.2; // how far apart (units) a tag may look to the host, for the lag of two pages
+const MAX_TAG_LAG = 5.5; // how far apart (units) a tag may look to the host, for the lag of two pages
 
 // ---------------------------------------------------------------- joining
 
@@ -240,6 +240,11 @@ export function createNet(room, ow, hooks) {
   }
 
   function tickHost() {
+    // If the host role came to this page while the match waited (nobody was running it), or the record is somebody else's, take it over.
+    if (room.isHost && room.running) {
+      const cur = G();
+      if (!cur || cur.mid !== room.match.id || cur.by !== me || !sane(cur)) adopt();
+    }
     const g = validG();
     if (!amHost(g)) return;
     refreshBots(g);
@@ -371,6 +376,10 @@ export function createNet(room, ow, hooks) {
     adopt();
   });
   room.on('reconnect', () => {
+    bwRid = '';
+    adopt();
+  });
+  room.on('matchresume', () => {
     bwRid = '';
     adopt();
   });

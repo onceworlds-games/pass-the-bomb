@@ -307,3 +307,21 @@ test('the lobby practice bomb can be passed but never blows', () => {
   assert.equal(pass(g, 0, 'p2', 1000 + ARC_MS + 10, null), true);
   assert.equal(pass(g, 0, 'me', 1e9, null), true, 'a year later it still hasn\'t blown');
 });
+
+test('a bomb that is already due is not handed to someone just before it blows', () => {
+  const g = dropped(6);
+  const b = g.bombs[0];
+  const away = b.h;
+  const ctx = { rand: rng(2), status: (id) => (id === away ? 'away' : 'ok') };
+  tick(g, b.b + 10, ctx); // due and its holder is away: it blows on them, nobody else
+  assert.equal(g.out.length, 1);
+  assert.equal(g.out[0].id, away);
+  const g2 = dropped(6);
+  const b2 = g2.bombs[0];
+  const leaver = b2.h;
+  tick(g2, b2.b + 10, { rand: rng(2), status: (id) => (id === leaver ? 'gone' : 'ok') });
+  assert.ok(g2.gone.includes(leaver));
+  assert.equal(g2.out.filter((o) => !o.l).length, 0, 'nobody was blown up for the leaver\'s bomb');
+  assert.equal(g2.bombs.some((x) => x.k === b2.k), false);
+  assert.equal(g2.drops.length >= 1, true, 'a new bomb is on its way');
+});

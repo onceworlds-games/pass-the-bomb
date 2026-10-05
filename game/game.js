@@ -2,7 +2,7 @@
 // (its own character is simulated here; other players come from presence, bots from the host's snapshots or, on the host,
 // from the bot simulation), reacts to changes in the match record `g`, and draws.
 
-import { W, H, STEP, TAG_DIST, BANNER_MS, OVER_MS, BETWEEN_MS, FINAL_MS, FALL_MS, ARC_MS, DASH_CD, DASH_CD_HOLD, PLAYER_COLORS, colorOfId, clamp, lerp } from './rules.js';
+import { W, H, STEP, TAG_DIST, BANNER_MS, OVER_MS, BETWEEN_MS, FINAL_MS, FALL_MS, ARC_MS, DASH_CD, DASH_CD_HOLD, colorOfId, clamp, lerp } from './rules.js';
 import { mapOf, spawnAt } from './maps.js';
 import { makeChar, resetChar, stepChar, stepGhost, softPush, collide } from './sim.js';
 import { rosterIndex, isOut, isImmune, isStunned, bombOf, aliveIds, finalRanking, awards } from './engine.js';
@@ -15,7 +15,7 @@ import { makeView, paintBackground, drawWorld, newFig, easeOutCubic } from './dr
 import * as ui from './ui.js';
 
 const PRES = { snap: 4 };
-const BOMB_Z = 2.35; // the bomb floats this high over its holder
+const BOMB_Z = 2.55; // the bomb floats this high over its holder
 const r1 = (v) => Math.round(v * 10) / 10;
 const r2 = (v) => Math.round(v * 100) / 100;
 const clipName = (s) => {
@@ -77,7 +77,8 @@ export function startGame({ ow, room, standalone, canvas }) {
   let controlsMode = '';
   let hideApplied = null;
   let lobbyAt = 0;
-  let scene = 'title';
+  let scene = 'title'; // what this page shows: the title, the lobby or the match
+  let world = 'title'; // what is going on behind it: the room's own state, which goes on whatever this page shows
   let curG = null;
   let curNow = 0;
   let closedReason = '';
@@ -534,7 +535,7 @@ export function startGame({ ow, room, standalone, canvas }) {
     const st = myStatus(g);
     const map = mapOf(g.map);
     const canMove = room.running && (g.phase === 'play' || g.phase === 'over');
-    if (st !== 'none' && canMove) {
+    if (st !== 'none' && canMove && !titleOn) {
       input.move(mv);
       if (st === 'in') {
         const hold = bombOf(g, myId) !== null;
@@ -633,7 +634,7 @@ export function startGame({ ow, room, standalone, canvas }) {
     f.cd = me.dashCd > 0 ? me.dashCd / (f.hold ? DASH_CD_HOLD : DASH_CD) : -1;
   }
 
-  function fillFromPractice(p) {
+  function fillFromPractice(p, names = true) {
     if (!p) return;
     for (const r of p.g.roster) {
       if (r.id === p.meId) continue;
@@ -646,7 +647,7 @@ export function startGame({ ow, room, standalone, canvas }) {
       f.vx = e.ch.vx;
       f.vy = e.ch.vy;
       f.dash = e.ch.dashT > 0;
-      f.name = r.n;
+      f.name = names ? r.n : '';
       f.c = r.c;
       f.bot = true;
       f.img = null;
@@ -657,7 +658,7 @@ export function startGame({ ow, room, standalone, canvas }) {
 
   function gatherLocal(sc, g) {
     if (sc === 'title') {
-      fillFromPractice(titleWorld);
+      fillFromPractice(titleWorld, false);
       return;
     }
     if (sc === 'lobby') {
@@ -875,7 +876,7 @@ export function startGame({ ow, room, standalone, canvas }) {
         o.flash = rem < 2000 ? (Math.sin(t * (14 + (1 - clamp(rem / 2000, 0, 1)) * 30)) * 0.5 + 0.5) * clamp(1.4 - rem / 2000, 0, 1) : 0;
         o.scale = 1 + (rem < 2000 ? (1 - clamp(rem / 2000, 0, 1)) * 0.18 : 0) + urg * Math.sin(t * 20) * 0.03;
         o.fuse = clamp(rem / Math.max(1, b.b - b.s), 0, 1);
-        if (fx.rand() < 0.35) fx.sparks(o.x + 0.38 * o.scale, o.y, o.z + 0.75, 1, '#ffd21f', 0.5);
+        if (fx.rand() < 0.35) fx.sparks(o.x + 0.42 * o.scale, o.y, o.z + 0.9 * o.scale, 1, '#ffd21f', 0.5);
         if (mine && (minRem === null || rem < minRem)) minRem = rem;
       }
     }
@@ -963,7 +964,9 @@ export function startGame({ ow, room, standalone, canvas }) {
     frameNo++;
     const g = net.validG();
     curG = g;
-    scene = titleOn ? 'title' : room.match.phase === 'playing' ? (g ? 'play' : 'wait') : 'lobby';
+    const sim = room.match.phase === 'playing' ? (g ? 'play' : 'wait') : 'lobby';
+    scene = titleOn ? 'title' : sim;
+    world = titleOn && sim === 'lobby' ? 'title' : sim; // a match goes on behind the title (and a host there still runs its bots)
     const mNow = room.matchNow();
     curNow = mNow;
     if (g !== seenG) {
@@ -971,7 +974,7 @@ export function startGame({ ow, room, standalone, canvas }) {
       seenG = g;
       onG(prev, g);
     }
-    ensureWorlds(scene);
+    ensureWorlds(world);
     applyHide(scene);
     applyControls(scene, g);
     applyMusic(scene, g);
@@ -981,20 +984,20 @@ export function startGame({ ow, room, standalone, canvas }) {
       fx.freeze -= dt;
       simDt = 0;
     }
-    gatherRemote(scene, g, mNow);
+    gatherRemote(world, g, mNow);
     acc += simDt;
     let n = 0;
     while (acc >= STEP && n < 5) {
       acc -= STEP;
       n++;
       input.tick(STEP);
-      fixed(scene, g, mNow);
+      fixed(world, g, mNow);
     }
     if (n === 5) acc = 0;
-    gatherLocal(scene, g);
-    animate(dt, t, scene, g, mNow);
+    gatherLocal(world, g);
+    animate(dt, t, world, g, mNow);
     fx.update(simDt);
-    publish(scene, g);
+    publish(world, g);
     // opened on its own (no platform strip): start a match by itself after a moment in the lobby
     if (standalone && scene === 'lobby' && room.match.phase === 'lobby') {
       const nowP = performance.now();
@@ -1029,7 +1032,7 @@ export function startGame({ ow, room, standalone, canvas }) {
     view = scene === 'lobby' ? viewLobby : viewFull;
     cx.setTransform(pr, 0, 0, pr, 0, 0);
     const g = curG;
-    const mapId = scene === 'title' ? 'backyard' : scene === 'play' && g ? g.map : String(room.settings.map);
+    const mapId = world === 'title' ? 'backyard' : world === 'play' && g ? g.map : String(room.settings.map);
     const map = mapOf(mapId);
     cx.drawImage(ensureBackground(map), 0, 0, view.W, view.H);
     fx.shake(t, clamp(view.s / 22, 0.6, 2.2));
@@ -1069,10 +1072,10 @@ export function startGame({ ow, room, standalone, canvas }) {
       const st = myStatus(g);
       const phase = g.phase;
       if (phase === 'play') {
-        ui.drawBanner(cx, view, "Don't get caught!", g.n > 1 || g.rounds > 1 ? `ROUND ${g.n}` : '', mNow - g.t0, BANNER_MS);
+        ui.drawBanner(cx, view, "Don't get caught!", g.n > 1 || g.rounds > 1 ? `ROUND ${g.n}` : '', mNow - g.t0 - (g.n === 1 ? 900 : 0), BANNER_MS);
         if (st === 'in' && bombOf(g, myId)) ui.drawPrompt(cx, view, 'Tag someone!', 1, t);
       }
-      if (phase !== 'final' && phase !== 'between') ui.drawHud(cx, view, { round: g.n, rounds: g.rounds, alive: aliveIds(g).length, score: g.scores[myId] ?? 0, out: st === 'ghost' });
+      if (phase !== 'final' && phase !== 'between') ui.drawHud(cx, view, { round: g.n, rounds: g.rounds, alive: aliveIds(g).length, score: g.scores[myId] ?? 0, out: st === 'ghost', dy: room.spectating ? 34 : 0 });
       if (phase === 'over') {
         const w = g.win;
         const label = !w ? 'Tie!' : w === myId ? 'You win!' : `${nameOf(w, g)} wins!`;

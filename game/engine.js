@@ -192,7 +192,8 @@ function blowBatch(g, batch, at) {
 function removePlayer(g, id, now, ctx) {
   const b = bombOf(g, id);
   if (b) {
-    const to = nearestTarget(g, id, ctx, id);
+    // A bomb already due isn't handed on (the next holder would be blown up the same instant): it goes with the leaver.
+    const to = b.b > now ? nearestTarget(g, id, ctx, id) : null;
     if (to !== null) moveBomb(g, b, to, now, 'jump');
     else g.bombs.splice(g.bombs.indexOf(b), 1);
   }
@@ -236,7 +237,7 @@ function playTick(g, now, ctx) {
     }
   }
   for (const b of g.bombs) {
-    if (b.a <= now && ctx.status(b.h) === 'away') {
+    if (b.a <= now && b.b > now && ctx.status(b.h) === 'away') {
       const to = nearestTarget(g, b.h, ctx, b.h);
       if (to !== null) {
         moveBomb(g, b, to, now, 'jump');

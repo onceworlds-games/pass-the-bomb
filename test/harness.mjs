@@ -53,7 +53,19 @@ export function installGlobals({ width = 844, height = 390 } = {}) {
     documentElement: { style: {} },
     body: { dataset: {}, style: {} },
   };
-  globalThis.Image = class {};
+  globalThis.Image = class {
+    constructor() {
+      this.naturalWidth = 120;
+      this.naturalHeight = 88;
+    }
+    set src(v) {
+      this._src = v;
+      setTimeout(() => this.onload && this.onload(), 10);
+    }
+    get src() {
+      return this._src;
+    }
+  };
   globalThis.AudioContext = function () {
     return anything();
   };
@@ -105,10 +117,11 @@ export function frames(n) {
 // ---------------------------------------------------------------- the canvas
 
 const fnCache = new Map();
-export const drawStats = { calls: 0, text: [], boxes: [], record: false };
+export const drawStats = { calls: 0, text: [], boxes: [], record: false, avatars: 0 };
 
 function check(name, args) {
   drawStats.calls++;
+  if (name === 'drawImage' && args[0] && args[0].naturalWidth) drawStats.avatars++;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (typeof a === 'number' && !Number.isFinite(a)) throw new Error(`canvas.${name}: argument ${i} is ${a} (${args.join(', ')})`);
@@ -275,6 +288,28 @@ export class Server {
       r.emit('match', r.match, before);
     }
   }
+  pause() {
+    this.match = { ...this.match, paused: { since: clock.T, reason: 'players' } };
+    this.broadcastMatch();
+    for (const r of this.rooms.values()) r.emit('matchpause', r.match);
+  }
+  resume() {
+    const held = clock.T - this.match.paused.since;
+    const { paused, ...rest } = this.match;
+    this.match = { ...rest, pausedMs: (rest.pausedMs ?? 0) + held };
+    this.broadcastMatch();
+    for (const r of this.rooms.values()) r.emit('matchresume', r.match);
+  }
+  /** A player's connection drops (their seat is held) or comes back. */
+  setAway(id, away) {
+    for (const r of this.rooms.values()) {
+      const p = r.players.get(id);
+      if (!p) continue;
+      if (away) p.connected = false;
+      else delete p.connected;
+      if (r.me.id !== id) r.emit(away ? 'away' : 'back', p, false);
+    }
+  }
   remove(id, reason = 'left') {
     const room = this.rooms.get(id);
     if (!room) return;
@@ -337,7 +372,8 @@ export class FakeRoom {
   matchNow() {
     const m = this.match;
     if (m.phase !== 'playing' || m.startedAt === undefined) return 0;
-    return Math.max(0, clock.T - m.startedAt - (m.pausedMs ?? 0));
+    const waited = (m.pausedMs ?? 0) + (m.paused ? Math.max(0, clock.T - m.paused.since) : 0);
+    return Math.max(0, clock.T - m.startedAt - waited);
   }
   on(e, f) {
     let s = this.listeners.get(e);
@@ -433,18 +469,20 @@ export function fakeOw(room, { touch = false } = {}) {
   const pressed = new Set();
   const awarded = [];
   const saves = new Map();
+  const controlsLog = [];
   return {
     mode: 'platform',
     now: () => clock.T,
     settings: { quality: 'high', scale: 1, reducedMotion: false, choice: 'auto', pixelRatio: (m = 2) => Math.min(2, m), on: () => noop },
-    controls: { set: noop, stick: { x: 0, y: 0 }, pressed: (id) => pressed.has(id), touch },
+    controls: { set: (o) => void controlsLog.push(o), stick: { x: 0, y: 0 }, pressed: (id) => pressed.has(id), touch, _pressed: pressed },
     ui: { setOrientation: noop, showInvite: noop, setMenuPosition: noop, requestFullscreen: noop },
-    player: { get: async () => ({ id: room.me.id, name: room.me.name, guest: true }), avatarUrl: async () => null },
+    player: { get: async () => ({ id: room.me.id, name: room.me.name, guest: true }), avatarUrl: async (id) => (id === 'p2' ? 'data:image/svg+xml,avatar' : null) },
     save: { get: async (k) => saves.get(k) ?? null, set: async (k, v) => void saves.set(k, v), delete: async () => {} },
     badges: { award: async (id) => (awarded.push(id), true) },
     leaderboards: { submit: async () => null },
     on: () => noop,
     _awarded: awarded,
+    _controls: controlsLog,
     _saves: saves,
   };
 }
